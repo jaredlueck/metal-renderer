@@ -1,0 +1,18 @@
+// Simple materials for axis gizmo coloring
+newmtl x_axis
+Kd 1.0 0.0 0.0
+Ka 0.2 0.0 0.0
+Ks 0.1 0.1 0.1
+Ns 10
+
+newmtl y_axis
+Kd 0.0 1.0 0.0
+Ka 0.0 0.2 0.0
+Ks 0.1 0.1 0.1
+Ns 10
+
+newmtl z_axis
+Kd 0.0 0.0 1.0
+Ka 0.0 0.0 0.2
+Ks 0.1 0.1 0.1
+Ns 10

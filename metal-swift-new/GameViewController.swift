@@ -36,9 +36,34 @@ class GameViewController: NSViewController {
         }
 
         renderer = newRenderer
+        self.mtkView = mtkView
 
         renderer.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
 
         mtkView.delegate = renderer
+    }
+    
+    override func mouseDragged(with event: NSEvent) {
+        renderer.rotationX += Float(event.deltaX) / 1000.0
+//        renderer.rotationY += Float(event.deltaY) / 1000.0
+    }
+    
+    override func mouseDown(with event: NSEvent){
+        guard let mtkView = self.mtkView else { return }
+        let windowPoint = event.locationInWindow
+        let viewPoint = mtkView.convert(windowPoint, from: nil)
+
+        let scale = mtkView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1.0
+        let pixelPoint = CGPoint(x: viewPoint.x * scale, y: viewPoint.y * scale)
+
+        let size = mtkView.drawableSize
+
+        // Convert CGFloat to Float explicitly for SIMD Float math
+        let width = Float(size.width)
+        let height = Float(size.height)
+        let px = Float(pixelPoint.x)
+        let py = Float(pixelPoint.y)
+
+        renderer.AABBintersect(px: px, py: py)
     }
 }
