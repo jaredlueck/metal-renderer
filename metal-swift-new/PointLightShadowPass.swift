@@ -10,8 +10,8 @@ import simd
 
 struct ShadowUniforms {
     var vp: simd_float4x4
-    var position: simd_float3
-    var far: simd_float1
+    var position: simd_float4
+    var radius: simd_float1
 }
 
 let faceDirections: [SIMD3<Float>] = [
@@ -57,15 +57,15 @@ class PointLightShadowPass {
                 guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
                     fatalError("failed to create encoder")
                 }
-                let lightPosition = SIMD3<Float>(light.position.x, light.position.y, light.position.z)
+                let eyePos = SIMD3<Float>(light.position.x, light.position.y, light.position.z)
                 let forward = faceDirections[face]
                 let up = faceUps[face]
-                let view = matrix_lookAt(eye: lightPosition, target: lightPosition + forward, up: up)
+                let view = matrix_lookAt(eye: eyePos, target: eyePos + forward, up: up)
                 let projection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(90), aspectRatio: 1, nearZ: 1, farZ: light.radius)
                                                                
                 let vp = matrix_multiply(projection, view)
                 
-                pipeline.bind(renderCommandEncoder: encoder, uniforms: ShadowUniforms(vp: vp, position: lightPosition, far: light.radius))
+                pipeline.bind(renderCommandEncoder: encoder, uniforms: ShadowUniforms(vp: vp, position: light.position, radius: light.radius))
                 
                 for i in 0..<sharedResources.renderables.count {
                     let renderable = sharedResources.renderables[i]

@@ -30,9 +30,11 @@ struct SharedResources {
     var outlineMask: MTLTexture?
     var renderables: [InstancedRenderable] = []
     var viewMatrix: simd_float4x4 = matrix_identity_float4x4
+    var cameraPos: SIMD3<Float> = SIMD3<Float>(0, 4.0, 8.0)
     var projectionMatrix: simd_float4x4 = matrix_identity_float4x4
     var selectedRenderableInstance: Instance? = nil
     var colorBuffer: MTLTexture?
+    var depthBuffer: MTLTexture
 }
 
 class Renderer: NSObject, MTKViewDelegate {
@@ -43,9 +45,7 @@ class Renderer: NSObject, MTKViewDelegate {
     public let device: MTLDevice
     let commandQueue: MTLCommandQueue
     var depthState: MTLDepthStencilState
-    
-    let cameraPos: SIMD3<Float> = SIMD3<Float>(0, 4.0, 8.0)
-    
+        
     var projectionMatrix: matrix_float4x4 = matrix_identity_float4x4
     
     var modelMatrix: matrix_float4x4 = matrix_identity_float4x4
@@ -66,7 +66,10 @@ class Renderer: NSObject, MTKViewDelegate {
         self.commandQueue = self.device.makeCommandQueue()!
         self.view = metalKitView
         
-        metalKitView.depthStencilPixelFormat = MTLPixelFormat.depth32Float_stencil8
+        let size = view.drawableSize   // CGSize in pixels
+        let width = Int(size.width)
+        let height = Int(size.height)
+        
         metalKitView.colorPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
         metalKitView.sampleCount = 1
         
@@ -74,6 +77,21 @@ class Renderer: NSObject, MTKViewDelegate {
         depthStateDescriptor.depthCompareFunction = MTLCompareFunction.less
         depthStateDescriptor.isDepthWriteEnabled = true
         self.depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)!
+        
+        let depthTexDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+                                                            width: width,
+                                                            height: height,
+                                                            mipmapped: false)
+        depthTexDesc.storageMode = .private
+        depthTexDesc.usage = [.renderTarget]
+        depthTexDesc.textureType = .type2D
+        depthTexDesc.sampleCount = 1
+        let depthTexture = device.makeTexture(descriptor: depthTexDesc)!
+        
+        let depthAttachmentDescriptor = MTLRenderPassDepthAttachmentDescriptor()
+        depthAttachmentDescriptor.texture = depthTexture
+        
+        self.view.currentRenderPassDescriptor?.depthAttachment = depthAttachmentDescriptor;
         
         let axisModel = Model(device: self.device, resourceName: "axis", ext: "obj")
         let axisRenderable = InstancedRenderable(device: device, model: axisModel)
@@ -105,10 +123,6 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let shadowAtlas = device.makeTexture(descriptor: desc)!
         
-        let size = view.drawableSize   // CGSize in pixels
-          let width = Int(size.width)
-          let height = Int(size.height)
-        
         let maskTextureDesc = MTLTextureDescriptor()
         maskTextureDesc.textureType = .type2D
         maskTextureDesc.pixelFormat = .r32Float
@@ -117,8 +131,8 @@ class Renderer: NSObject, MTKViewDelegate {
         maskTextureDesc.usage = [.renderTarget, .shaderRead]
         let outlineMask = device.makeTexture(descriptor: maskTextureDesc)
         let pointLight = PointLight(position: SIMD4<Float>(0, 1, 0, 0), color: SIMD4<Float>(1, 1, 1, 1),
-                                    radius: 15 )
-        sharedResources = SharedResources( pointLights: [pointLight], pointLightShadowAtlas: shadowAtlas, outlineMask: outlineMask, renderables: [axisRenderable, sphereRenderable, planeRenderable], viewMatrix: self.viewMatrix, projectionMatrix: self.projectionMatrix)
+                                    radius: 10 )
+        sharedResources = SharedResources( pointLights: [pointLight], pointLightShadowAtlas: shadowAtlas, outlineMask: outlineMask, renderables: [axisRenderable, sphereRenderable, planeRenderable], viewMatrix: self.viewMatrix, projectionMatrix: self.projectionMatrix, depthBuffer: depthTexture)
         sharedResources.selectedRenderableInstance = sphereRenderable.instances[0]
         super.init()
     }
@@ -128,7 +142,7 @@ class Renderer: NSObject, MTKViewDelegate {
             radians: rotationX,
             axis: SIMD3<Float>(0, 1, 0)) *
         matrix4x4_rotation(radians: rotationY, axis: SIMD3<Float>(1, 0, 0))
-        self.sharedResources.viewMatrix = matrix_lookAt(eye: cameraPos, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
+        self.sharedResources.viewMatrix = matrix_lookAt(eye: self.sharedResources.cameraPos, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
     }
     
     func draw(in view: MTKView) {
@@ -157,6 +171,7 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let outlinePass = OutlinePass(device: device)
         outlinePass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+        
         guard let blit = commandBuffer.makeBlitCommandEncoder() else {
             fatalError()
         }

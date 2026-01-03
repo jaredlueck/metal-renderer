@@ -22,6 +22,7 @@ class ColorPass {
     }
     
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: SharedResources){
+        descriptor.depthAttachment.texture = sharedResources.depthBuffer
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
             fatalError("failed to create encoder")
         }
@@ -51,6 +52,14 @@ class ColorPass {
         encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
         
         encoder.popDebugGroup()
+        
+        
+        let gridPipeline = GridPipeline(device: self.device)
+        
+        let gridUniforms = GridUniforms(view: sharedResources.viewMatrix, projection: sharedResources.projectionMatrix, gridColor: SIMD4<Float>(1.0,1.0,1.0,1.0), cameraPos: SIMD4<Float>(sharedResources.cameraPos, 1.0))
+        gridPipeline.bind(encoder: encoder, uniforms: gridUniforms)
+        
+        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
         
         encoder.pushDebugGroup("render meshes")
         

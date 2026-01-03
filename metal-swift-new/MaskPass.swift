@@ -23,7 +23,6 @@ class MaskPass {
     }
     
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        
         self.descriptor.colorAttachments[0].texture = sharedResources.outlineMask
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
             fatalError("Failed to create render command encoder")

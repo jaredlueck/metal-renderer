@@ -46,7 +46,6 @@ class InstancedRenderable {
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
-        
         var transforms: [float4x4] = []
         if let instanceId = instanceId {
             let instance = instances.first(where: {$0.id == instanceId})
@@ -111,9 +110,7 @@ class InstancedRenderable {
                             indexType: indexType,
                             indexBuffer: mtkIndexBuffer.buffer,
                             indexBufferOffset: 0,
-                            
                             instanceCount: transforms.count,
-                            
                         )
                     }
                 }

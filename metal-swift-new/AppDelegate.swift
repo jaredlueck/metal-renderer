@@ -7,17 +7,29 @@
 
 import Cocoa
 
-@main
 class AppDelegate: NSObject, NSApplicationDelegate {
     
-    @IBOutlet var window: NSWindow!
-    
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
+    var window: NSWindow!
         
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Create and show the main application window programmatically
+        let frame = NSMakeRect(0, 0, 800, 600)
+        self.window = NSWindow(
+            contentRect:frame,
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "metal-swift-new"
+        let viewController = GameViewController()
+        viewController.frame = self.window.frame
+        window.contentViewController = viewController
+        window.makeKeyAndOrderFront(nil)
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        
+         
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

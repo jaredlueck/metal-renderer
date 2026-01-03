@@ -40,7 +40,7 @@ struct PointLight {
 };
 
 float PCF(depth2d<float> shadowMap, uint2 pixel, float receiverDepth, uint kernelSize);
-float PCFCube(texturecube_array<float> shadowAtlas, sampler shadowSampler,float3 dir, float redeiverDepth, float3 normal, uint layer = 0, uint kernelSize = 3);
+float PCFCube(texturecube_array<float> shadowAtlas, sampler shadowSampler, float3 dir, float receiverDepth, float3 normal, uint layer = 0, uint kernelSize = 3);
 float3 calculatePointLightColor(PointLight light, float3 fragmentPosition);
 
 vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
@@ -87,30 +87,32 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
     float3 lightPosView = (uniforms.view * float4(light.position.xyz, 1.0)).xyz;
     float3 L = normalize(lightPosView - in.viewPos); // direction from fragment to light in view space
     float3 H = normalize(L + V);
-    
+        
     // distance from light to fragment
     float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
-
     float3 shadowDir = normalize(in.worldPos - light.position.xyz);
 
     // Sample normalized distance from the cube array using the NON-compare shadow sampler
-    float shadowFactor = PCFCube(pointLightShadowMaps, shadowSampler, shadowDir, receiverDepth, in.normal,  0, 3);
+    float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(pointLightShadowMaps, shadowSampler, shadowDir, receiverDepth, in.worldNormal,  0, 3);
+//    float shadowFactor = pointLightShadowMaps.sample(shadowSampler, shadowDir, 0).r;
+    
     
     float3 lightColor = calculatePointLightColor(light, in.worldPos);
     
     float lightDiffuse = max(dot(N, L), 0.0);
     float lightSpec = pow(max(dot(N, H), 0.0), 64);
     
-    diffuse += shadowFactor * lightDiffuse * material.baseColor;
+    diffuse += shadowFactor * lightDiffuse * material.baseColor * lightColor;
     specular +=  shadowFactor * lightSpec * lightColor;
 
     float3 result = ambient + diffuse; // + specular if desired
+//    return float4(shadowFactor, shadowFactor, shadowFactor, 1.0);
     return float4(result, 1.0);
 }
 
 float3 calculatePointLightColor(PointLight light, float3 fragmentPosition) {
-    float r = length(fragmentPosition - light.position.xyz);
-    return light.color.xyz * pow(max(((1-pow((r/light.radius),2.0))),0.0), 2.0);
+    float r = abs(length(fragmentPosition - light.position.xyz));
+    return light.color.xyz * max(((1-pow((r/light.radius),2.0))),0.0);
 }
 
 float PCFCube(texturecube_array<float> shadowAtlas,
@@ -132,12 +134,12 @@ float PCFCube(texturecube_array<float> shadowAtlas,
     float width = shadowAtlas.get_width();
     float maxAxis = max(max(abs(dir.x), abs(dir.y)), abs(dir.z));
 
-    const float filterRadius = 1.0;
+    const float filterRadius = 5.0;
     float delta = (2.0 * maxAxis) / width * filterRadius;
 
     float bias = 0.0001;
     float sum = 0.0;
-    int k = (int)kernelSize;
+    int k = 5;
 
     for (int dx = -k; dx <= k; ++dx) {
         for (int dy = -k; dy <= k; ++dy) {

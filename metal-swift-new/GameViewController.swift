@@ -13,30 +13,26 @@ class GameViewController: NSViewController {
 
     var renderer: Renderer!
     var mtkView: MTKView!
+    var frame: CGRect!
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        guard let mtkView = self.view as? MTKView else {
-            print("View attached to GameViewController is not an MTKView")
-            return
-        }
-
+                        
         // Select the device to render with.  We choose the default device
         guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
             print("Metal is not supported on this device")
             return
         }
 
-        mtkView.device = defaultDevice
+        self.mtkView = MTKView(frame: self.frame, device: defaultDevice)
 
         guard let newRenderer = Renderer(metalKitView: mtkView) else {
             print("Renderer cannot be initialized")
             return
         }
+        self.view = self.mtkView
 
         renderer = newRenderer
-        self.mtkView = mtkView
 
         renderer.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
 
@@ -45,10 +41,9 @@ class GameViewController: NSViewController {
     
     override func mouseDragged(with event: NSEvent) {
         renderer.rotationX += Float(event.deltaX) / 1000.0
-//        renderer.rotationY += Float(event.deltaY) / 1000.0
     }
     
-    override func mouseDown(with event: NSEvent){
+    override func mouseUp(with event: NSEvent){
         guard let mtkView = self.mtkView else { return }
         let windowPoint = event.locationInWindow
         let viewPoint = mtkView.convert(windowPoint, from: nil)
