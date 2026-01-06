@@ -47,16 +47,8 @@ class InstancedRenderable {
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
         var transforms: [float4x4] = []
-        if let instanceId = instanceId {
-            let instance = instances.first(where: {$0.id == instanceId})
-            if let instance = instance {
-                transforms.append(instance.transform)
-            }
-        } else {
-            for instance in instances {
-                transforms.append(instance.transform)
-            }
-        }
+        transforms = (instanceId.flatMap { id in instances.first(where: { $0.id == id }) }.map { [$0.transform] })
+            ?? instances.map { $0.transform }
         
         let bufferlength = MemoryLayout<simd_float4x4>.stride * transforms.count
 
@@ -64,22 +56,19 @@ class InstancedRenderable {
             renderEncoder.setVertexBytes(
                 rawBuffer.baseAddress!,
                 length: bufferlength,
-                index: 2
+                index: Bindings.instanceData
             )
         }
 
         for i in 0..<model.asset.count {
             guard let mdlMesh = model.asset.object(at: i) as? MDLMesh else { continue }
 
-            // Set the vertex buffer from the first vertex buffer if available
             if let mtkBuffer = mdlMesh.vertexBuffers.first as? MTKMeshBuffer {
-                renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: 1)
+                renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: Bindings.vertexBuffer)
             }
 
-            // Iterate submeshes by casting to [MDLSubmesh]
             if let mdlSubmeshes = mdlMesh.submeshes as? [MDLSubmesh] {
                 for mdlSubmesh in mdlSubmeshes {
-                    // MDLSubmesh provides indexCount and indexBuffer (as MDLMeshBuffer)
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
                     let material = mdlSubmesh.material
@@ -88,7 +77,7 @@ class InstancedRenderable {
                     var materialUniform = Material(baseColor: baseColor ?? .zero)
                     
                     withUnsafeBytes(of: &materialUniform )  { rawBuffer in
-                        renderEncoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<Material>.stride, index: 4)
+                        renderEncoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<Material>.stride, index: Bindings.materialData)
                         
                     }
                     
@@ -98,7 +87,6 @@ class InstancedRenderable {
                     case .uInt32:
                         indexType = .uint32
                     default:
-                        // Fallback to uint32 if an unexpected bit depth is encountered
                         indexType = .uint32
                     }
 

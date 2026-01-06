@@ -13,7 +13,6 @@ class GameViewController: NSViewController {
 
     var renderer: Renderer!
     var mtkView: MTKView!
-    var frame: CGRect!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -23,27 +22,40 @@ class GameViewController: NSViewController {
             print("Metal is not supported on this device")
             return
         }
+        
+        let bounds = self.view.bounds
 
-        self.mtkView = MTKView(frame: self.frame, device: defaultDevice)
+        let mtkView = MTKView(frame: bounds, device: defaultDevice)
+        mtkView.autoresizingMask = [.width, .height]
+
+        self.mtkView = mtkView
+        self.view = mtkView
+
 
         guard let newRenderer = Renderer(metalKitView: mtkView) else {
             print("Renderer cannot be initialized")
             return
         }
-        self.view = self.mtkView
-
         renderer = newRenderer
 
         renderer.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
+        
+        let trackingArea = NSTrackingArea(rect: .zero,
+                                          options: [.mouseMoved, .inVisibleRect, .activeAlways],
+                                          owner: self,
+                                          userInfo: nil)
+        view.addTrackingArea(trackingArea)
 
         mtkView.delegate = renderer
+        
+        ImGui_ImplOSX_Init(view)
+
     }
     
-    override func mouseDragged(with event: NSEvent) {
-        renderer.rotationX += Float(event.deltaX) / 1000.0
-    }
+
     
     override func mouseUp(with event: NSEvent){
+        ImGui_ImplOSX_HandleEvent(event, view)
         guard let mtkView = self.mtkView else { return }
         let windowPoint = event.locationInWindow
         let viewPoint = mtkView.convert(windowPoint, from: nil)
@@ -53,12 +65,21 @@ class GameViewController: NSViewController {
 
         let size = mtkView.drawableSize
 
-        // Convert CGFloat to Float explicitly for SIMD Float math
-        let width = Float(size.width)
-        let height = Float(size.height)
         let px = Float(pixelPoint.x)
         let py = Float(pixelPoint.y)
 
         renderer.AABBintersect(px: px, py: py)
+    }
+    
+    override func mouseDown(with event: NSEvent) {
+        ImGui_ImplOSX_HandleEvent(event, view)
+    }
+    
+    override func mouseMoved(with event: NSEvent) {
+        ImGui_ImplOSX_HandleEvent(event, view)
+    }
+    
+    override func mouseDragged(with event: NSEvent) {
+        ImGui_ImplOSX_HandleEvent(event, view)
     }
 }

@@ -13,17 +13,17 @@ enum VertexDescriptors{
         // Position attribute at location 0 (float3)
         vertexDescriptor.attributes[0].format = .float3
         vertexDescriptor.attributes[0].offset = 0
-        vertexDescriptor.attributes[0].bufferIndex = 1
+        vertexDescriptor.attributes[0].bufferIndex = 0
         // Normal attribute
         vertexDescriptor.attributes[1].format = .float3
         vertexDescriptor.attributes[1].offset = MemoryLayout<Float>.size * 3
-        vertexDescriptor.attributes[1].bufferIndex = 1
+        vertexDescriptor.attributes[1].bufferIndex = 0
         // Texture Coordinate attribute
         vertexDescriptor.attributes[2].format = .float2
         vertexDescriptor.attributes[2].offset = MemoryLayout<Float>.size * 6
-        vertexDescriptor.attributes[2].bufferIndex = 1
+        vertexDescriptor.attributes[2].bufferIndex = 0
         // Vertex buffer layout: tightly packed float3 positions
-        vertexDescriptor.layouts[1].stride = 32
+        vertexDescriptor.layouts[0].stride = 32
         
         return vertexDescriptor
     }

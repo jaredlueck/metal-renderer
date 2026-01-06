@@ -10,12 +10,14 @@
 import Metal
 import MetalKit
 import simd
+import ImGui
 
-struct Uniforms {
-    var view: simd_float4x4
-    var projection: simd_float4x4
-    var inverseView: simd_float4x4
-    var inverseProjection: simd_float4x4
+struct FrameUniforms {
+    var view: simd_float4x4 =  matrix_identity_float4x4
+    var projection: simd_float4x4 =  matrix_identity_float4x4
+    var inverseView: simd_float4x4 =  matrix_identity_float4x4
+    var inverseProjection: simd_float4x4  = matrix_identity_float4x4
+    var cameraPos: simd_float4 = SIMD4<Float>(0, 2, 5, 1)
 }
 
 struct PointLight {
@@ -24,40 +26,43 @@ struct PointLight {
     var radius: simd_float1
 }
 
-struct SharedResources {
+struct LightData {
     var pointLights: [PointLight] = []
-    var pointLightShadowAtlas: MTLTexture?
-    var outlineMask: MTLTexture?
-    var renderables: [InstancedRenderable] = []
-    var viewMatrix: simd_float4x4 = matrix_identity_float4x4
-    var cameraPos: SIMD3<Float> = SIMD3<Float>(0, 4.0, 8.0)
-    var projectionMatrix: simd_float4x4 = matrix_identity_float4x4
-    var selectedRenderableInstance: Instance? = nil
-    var colorBuffer: MTLTexture?
-    var depthBuffer: MTLTexture
+    var pontLightShadowAtlas: MTLTexture
+    var lightCount: Int = 0
 }
 
+struct SharedResources {
+    var lightData: LightData
+    var frameUniforms: FrameUniforms
+    var outlineMask: MTLTexture?
+    var renderables: [InstancedRenderable] = []
+    var selectedRenderableInstance: Instance? = nil
+    var colorBuffer: MTLTexture
+    var depthBuffer: MTLTexture
+    var skyBoxTexture: MTLTexture
+    var depthStencilStateDisabled: MTLDepthStencilState
+    var depthStencilStateEnabled: MTLDepthStencilState
+    var sampler: MTLSamplerState
+    var shadowSampler: MTLSamplerState
+    var view: MTKView
+}
+
+var f: Float = 0.0
+var clear_color: SIMD3<Float> = .init(x: 0.28, y: 0.36, z: 0.5)
+var counter: Int = 0
+
 class Renderer: NSObject, MTKViewDelegate {
-    
-    private let maxFramesInFlight = 3
-    private let inFlightSemaphore = DispatchSemaphore(value: 3)
-    
-    public let device: MTLDevice
+    let device: MTLDevice
     let commandQueue: MTLCommandQueue
-    var depthState: MTLDepthStencilState
-        
-    var projectionMatrix: matrix_float4x4 = matrix_identity_float4x4
-    
-    var modelMatrix: matrix_float4x4 = matrix_identity_float4x4
-    
-    var viewMatrix: matrix_float4x4 = matrix_identity_float4x4
-    
-    var rotationX: Float = 0
-    var rotationY: Float = 0
     
     let view: MTKView
     
     var sharedResources: SharedResources
+    
+    let depthTextureDescriptor: MTLTextureDescriptor
+    let colorTextureDescriptor: MTLTextureDescriptor
+    let maskTextureDescriptor: MTLTextureDescriptor
     
     @MainActor
     init?(metalKitView: MTKView) {
@@ -71,140 +76,250 @@ class Renderer: NSObject, MTKViewDelegate {
         let height = Int(size.height)
         
         metalKitView.colorPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
-        metalKitView.sampleCount = 1
         
-        let depthStateDescriptor = MTLDepthStencilDescriptor()
-        depthStateDescriptor.depthCompareFunction = MTLCompareFunction.less
-        depthStateDescriptor.isDepthWriteEnabled = true
-        self.depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)!
+        let textureLoader = MTKTextureLoader(device: device)
         
-        let depthTexDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
+        guard let url = Bundle.main.url(forResource: "vertical" , withExtension: "png") else {
+            fatalError("Couldn't find skybox texture")
+        }
+        let skyboxTexture = try! textureLoader.newTexture(URL: url, options: [.cubeLayout: MTKTextureLoader.CubeLayout.vertical])
+        
+        self.depthTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
                                                             width: width,
                                                             height: height,
                                                             mipmapped: false)
-        depthTexDesc.storageMode = .private
-        depthTexDesc.usage = [.renderTarget]
-        depthTexDesc.textureType = .type2D
-        depthTexDesc.sampleCount = 1
-        let depthTexture = device.makeTexture(descriptor: depthTexDesc)!
+        self.depthTextureDescriptor.storageMode = .private
+        self.depthTextureDescriptor.usage = [.renderTarget]
+        self.depthTextureDescriptor.textureType = .type2D
+        let depthTexture = device.makeTexture(descriptor: self.depthTextureDescriptor)!
         
         let depthAttachmentDescriptor = MTLRenderPassDepthAttachmentDescriptor()
         depthAttachmentDescriptor.texture = depthTexture
         
-        self.view.currentRenderPassDescriptor?.depthAttachment = depthAttachmentDescriptor;
-        
-        let axisModel = Model(device: self.device, resourceName: "axis", ext: "obj")
-        let axisRenderable = InstancedRenderable(device: device, model: axisModel)
-        axisRenderable.addInstance(transform: matrix4x4_rotation(radians: radians_from_degrees(90), axis: SIMD3<Float>(0,1,0)))
-        axisRenderable.castsShadows = false
-        axisRenderable.selectable = false
-        
         let sphereModel = Model(device: self.device, resourceName: "sphere")
         let sphereRenderable = InstancedRenderable(device: device, model: sphereModel)
-        sphereRenderable.addInstance(transform: modelMatrix * matrix4x4_translation(-4, 1, 0))
-        sphereRenderable.addInstance(transform: modelMatrix * matrix4x4_translation(4, 1, 0))
-        sphereRenderable.addInstance(transform: modelMatrix * matrix4x4_translation(0, 1, -4))
+        sphereRenderable.addInstance(transform: matrix4x4_translation(-4, 1, 0))
+        sphereRenderable.addInstance(transform: matrix4x4_translation(4, 1, 0))
+        sphereRenderable.addInstance(transform: matrix4x4_translation(0, 1, -4))
         
         let planeModel = Model(device: self.device, resourceName: "plane")
         let planeRenderable = InstancedRenderable(device: device, model: planeModel)
-        planeRenderable.addInstance(transform: modelMatrix * matrix4x4_scale(scaleX: 100, scaleY: 100, scaleZ: 100))
+        planeRenderable.addInstance(transform: matrix4x4_scale(scaleX: 100, scaleY: 100, scaleZ: 100))
         planeRenderable.castsShadows = false
         planeRenderable.selectable = false
         
-        let desc = MTLTextureDescriptor()
-        desc.textureType = .typeCubeArray
-        desc.pixelFormat = .r32Float
-        desc.width = 1024
-        desc.height = 1024
-        desc.arrayLength = 6
-        desc.mipmapLevelCount = 1
-        desc.sampleCount = 1
-        desc.usage = [.renderTarget, .shaderRead]
+        let shadowAtlasDesc = MTLTextureDescriptor()
+        shadowAtlasDesc.textureType = .typeCubeArray
+        shadowAtlasDesc.pixelFormat = .r32Float
+        shadowAtlasDesc.width = width
+        shadowAtlasDesc.height = height
+        shadowAtlasDesc.arrayLength = 6
+        shadowAtlasDesc.mipmapLevelCount = 1
+        shadowAtlasDesc.sampleCount = 1
+        shadowAtlasDesc.usage = [.renderTarget, .shaderRead]
         
-        let shadowAtlas = device.makeTexture(descriptor: desc)!
+        let shadowAtlas = device.makeTexture(descriptor: shadowAtlasDesc)!
         
-        let maskTextureDesc = MTLTextureDescriptor()
-        maskTextureDesc.textureType = .type2D
-        maskTextureDesc.pixelFormat = .r32Float
-        maskTextureDesc.height = height
-        maskTextureDesc.width = width
-        maskTextureDesc.usage = [.renderTarget, .shaderRead]
-        let outlineMask = device.makeTexture(descriptor: maskTextureDesc)
+        self.colorTextureDescriptor = MTLTextureDescriptor()
+        self.colorTextureDescriptor.textureType = .type2D
+        self.colorTextureDescriptor.pixelFormat = view.colorPixelFormat
+        self.colorTextureDescriptor.width = width
+        self.colorTextureDescriptor.height = height
+        self.colorTextureDescriptor.mipmapLevelCount = 1
+        self.colorTextureDescriptor.usage = [.renderTarget, .shaderRead]
+        
+        let colorBuffer = device.makeTexture(descriptor: self.colorTextureDescriptor)!
+        
+        self.maskTextureDescriptor = MTLTextureDescriptor()
+        self.maskTextureDescriptor.textureType = .type2D
+        self.maskTextureDescriptor.pixelFormat = .r32Float
+        self.maskTextureDescriptor.height = height
+        self.maskTextureDescriptor.width = width
+        self.maskTextureDescriptor.usage = [.renderTarget, .shaderRead]
+        
+        let outlineMask = device.makeTexture(descriptor: self.maskTextureDescriptor)
+        
+        let samplerDescriptor = MTLSamplerDescriptor()
+        samplerDescriptor.minFilter = .linear
+        samplerDescriptor.magFilter = .linear
+        samplerDescriptor.mipFilter = .linear
+        guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
+            fatalError("Failed to create sampler state")
+        }
+        
+        let shadowSamplerDesc = MTLSamplerDescriptor()
+        shadowSamplerDesc.minFilter = .linear
+        shadowSamplerDesc.magFilter = .linear
+        shadowSamplerDesc.mipFilter = .notMipmapped // depth maps often no mipmaps
+        shadowSamplerDesc.sAddressMode = .clampToEdge
+        shadowSamplerDesc.tAddressMode = .clampToEdge
+        shadowSamplerDesc.rAddressMode = .clampToEdge
+        shadowSamplerDesc.normalizedCoordinates = true
+
+        guard let shadowSampler = device.makeSamplerState(descriptor: shadowSamplerDesc) else {
+            fatalError("Failed to create shadow comparison sampler")
+        }
+        
+        let depthStencilStateDesabledDesc = MTLDepthStencilDescriptor()
+        depthStencilStateDesabledDesc.isDepthWriteEnabled = false
+        depthStencilStateDesabledDesc.depthCompareFunction = .always
+        
+        guard let depthStencilStateDisabled = device.makeDepthStencilState(descriptor: depthStencilStateDesabledDesc) else {
+            fatalError("Failed to create depth stencil state")
+        }
+        
+        let depthStencilStateEnabledDesc = MTLDepthStencilDescriptor()
+        depthStencilStateEnabledDesc.isDepthWriteEnabled = true
+        depthStencilStateEnabledDesc.depthCompareFunction = .lessEqual
+        
+        
+        guard let depthStencilStateEnabled = device.makeDepthStencilState(descriptor: depthStencilStateEnabledDesc) else {
+            fatalError("Failed to create depth stencil state")
+        }
+        
         let pointLight = PointLight(position: SIMD4<Float>(0, 1, 0, 0), color: SIMD4<Float>(1, 1, 1, 1),
-                                    radius: 10 )
-        sharedResources = SharedResources( pointLights: [pointLight], pointLightShadowAtlas: shadowAtlas, outlineMask: outlineMask, renderables: [axisRenderable, sphereRenderable, planeRenderable], viewMatrix: self.viewMatrix, projectionMatrix: self.projectionMatrix, depthBuffer: depthTexture)
+                                    radius: 10)
+        let lightData = LightData(pointLights: [pointLight], pontLightShadowAtlas: shadowAtlas, lightCount: 1)
+        
+        sharedResources = SharedResources( lightData: lightData, frameUniforms: FrameUniforms(), outlineMask: outlineMask, renderables: [sphereRenderable, planeRenderable], colorBuffer: colorBuffer, depthBuffer: depthTexture,  skyBoxTexture: skyboxTexture, depthStencilStateDisabled: depthStencilStateDisabled, depthStencilStateEnabled: depthStencilStateEnabled, sampler: sampler, shadowSampler: shadowSampler, view: self.view)
         sharedResources.selectedRenderableInstance = sphereRenderable.instances[0]
+        
         super.init()
+        
+        _ = ImGuiCreateContext(nil)
+        ImGuiStyleColorsDark(nil)
+        ImGui_ImplMetal_Init(device)
     }
     
     private func updateGameState() {
-        self.modelMatrix = matrix4x4_rotation(
-            radians: rotationX,
-            axis: SIMD3<Float>(0, 1, 0)) *
-        matrix4x4_rotation(radians: rotationY, axis: SIMD3<Float>(1, 0, 0))
-        self.sharedResources.viewMatrix = matrix_lookAt(eye: self.sharedResources.cameraPos, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
+        let cameraPos = self.sharedResources.frameUniforms.cameraPos
+        let eye = SIMD3<Float>(cameraPos.x, cameraPos.y, cameraPos.z)
+        self.sharedResources.frameUniforms.view = matrix_lookAt(eye: eye, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
     }
     
     func draw(in view: MTKView) {
-        _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
+        // Convert drawableSize (CGSize) to Ints for comparison
+        let expectedW = Int(view.drawableSize.width)
+        let expectedH = Int(view.drawableSize.height)
+
+        guard let drawable = view.currentDrawable else {
+            return // No drawable this frame
+        }
+        let tex = drawable.texture
+
+        if tex.width != expectedW || tex.height != expectedH {
+            return
+        }
+
+        var show_demo_window: Bool = false
+        let io = ImGuiGetIO()!
+
+        io.pointee.DisplaySize.x = Float(view.bounds.size.width)
+        io.pointee.DisplaySize.y = Float(view.bounds.size.height)
+
+        let frameBufferScale = Float(view.window?.screen?.backingScaleFactor ?? NSScreen.main!.backingScaleFactor)
+
+        io.pointee.DisplayFramebufferScale = ImVec2(x: frameBufferScale, y: frameBufferScale)
+        io.pointee.DeltaTime = 1.0 / Float(view.preferredFramesPerSecond)
 
         let commandBuffer = commandQueue.makeCommandBuffer()!
-        let semaphore = inFlightSemaphore
-        commandBuffer.addCompletedHandler { (_ commandBuffer) -> Swift.Void in
-            semaphore.signal()
-            
-        }
         
         self.updateGameState()
         
-        let maskPass = MaskPass(device: device)
-        maskPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
-        
-        let shadowPass = PointLightShadowPass(device: device)
-        
-        shadowPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
-        
-        let colorPass = ColorPass(device: device, mtkDescriptor: view.currentRenderPassDescriptor!)
-        colorPass.encode(commandBuffer: commandBuffer, sharedResources: sharedResources)
-        
-        sharedResources.colorBuffer = view.currentRenderPassDescriptor?.colorAttachments[0].texture!
-        
-        let outlinePass = OutlinePass(device: device)
-        outlinePass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
-        
-        guard let blit = commandBuffer.makeBlitCommandEncoder() else {
+        guard let mtkDescriptor = view.currentRenderPassDescriptor else {
             fatalError()
         }
-        guard let colorBuffer: MTLTexture = sharedResources.colorBuffer else {
-            return;
+        
+        // create shadow atlas for point lights
+        let shadowPass = ShadowPass(device: device, colorTexture: sharedResources.lightData.pontLightShadowAtlas)
+        shadowPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+        
+        // render meshes
+        let colorPass = ColorPassx(device: device, depthTexture: sharedResources.depthBuffer, colorTexture: sharedResources.colorBuffer)
+        colorPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+        
+        // Render Editor layers
+        let maskPass = MaskPass(device: device)
+        maskPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+                
+        let outlinePass = OutlinePass(device: device, colorTexture: sharedResources.colorBuffer, depthTexture: sharedResources.depthBuffer)
+        outlinePass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+        
+        mtkDescriptor.colorAttachments[0].texture = sharedResources.colorBuffer
+        mtkDescriptor.colorAttachments[0].loadAction = .load
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor:  mtkDescriptor) else {
+            fatalError("Failed to create render command encoder")
         }
-        guard let viewText: MTLTexture = view.currentDrawable?.texture else {
-            return;
-        }
-        blit.copy(from: colorBuffer,
-                  sourceSlice: 0,
-                  sourceLevel: 0,
-                  sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-                  sourceSize: MTLSize(width: sharedResources.colorBuffer!.width,
-                                      height: sharedResources.colorBuffer!.height,
-                                      depth: 1),
-                  to: viewText,
-                  destinationSlice: 0,
-                  destinationLevel: 0,
-                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
-        blit.endEncoding()
 
-        if let drawable = view.currentDrawable {
-            commandBuffer.present(drawable)
+                
+        ImGui_ImplMetal_NewFrame(mtkDescriptor)
+        ImGui_ImplOSX_NewFrame(view)
+        ImGuiNewFrame()
+//        ImGuiShowDemoWindow(&show_demo_window)
+        // Create a window called "Hello, world!" and append into it.
+        ImGuiBegin("Begin", &show_demo_window, 0)
+
+        // Display some text (you can use a format strings too)
+        ImGuiTextV("This is some useful text.")
+
+        // Edit bools storing our window open/close state
+        ImGuiSliderFloat("Float Slider", &f, 0.0, 1.0, nil, 1) // Edit 1 float using a slider from 0.0f to 1.0f
+
+        ImGuiColorEdit3("clear color", &clear_color, 0) // Edit 3 floats representing a color
+
+        if ImGuiButton("Button", ImVec2(x: 100, y: 20)) { // Buttons return true when clicked (most widgets return true when edited/activated)
+            counter += 1
         }
+
+        // SameLine(offset_from_start_x: 0, spacing: 0)
+
+        ImGuiSameLine(0, 2)
+        ImGuiTextV(String(format: "counter = %d", counter))
+
+        let avg: Float = (1000.0 / io.pointee.Framerate)
+        let fps = io.pointee.Framerate
+
+        ImGuiTextV(String(format: "Application average %.3f ms/frame (%.1f FPS)", avg, fps))
+
+        ImGuiEnd()
+        
+        ImGuiRender()
+        let drawData = ImGuiGetDrawData()!
+
+        ImGui_ImplMetal_RenderDrawData(drawData.pointee, commandBuffer, encoder)
+        encoder.endEncoding()
+        
+        let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
+        
+        blitEncoder.copy(from: sharedResources.colorBuffer, to: drawable.texture)
+        blitEncoder.endEncoding()
+        
+        commandBuffer.present(drawable)
+        
+
         commandBuffer.commit()
     }
     
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        /// Respond to drawable size or orientation changes here
         let aspect = Float(size.width) / Float(size.height)
-        self.sharedResources.projectionMatrix = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
+        
+        let width = Int(size.width)
+        let height = Int(size.height)
+        self.sharedResources.frameUniforms.projection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
+        
+        self.depthTextureDescriptor.height = height
+        self.depthTextureDescriptor.width = width
+        self.sharedResources.depthBuffer = device.makeTexture(descriptor: self.depthTextureDescriptor)!
+        
+        self.maskTextureDescriptor.height = height
+        self.maskTextureDescriptor.width = width
+        device.makeTexture(descriptor: self.maskTextureDescriptor)
+        self.sharedResources.outlineMask = device.makeTexture(descriptor: self.maskTextureDescriptor)
+        
+        self.colorTextureDescriptor.height = height
+        self.colorTextureDescriptor.width = width
+        self.sharedResources.colorBuffer = device.makeTexture(descriptor: self.colorTextureDescriptor)!
     }
     
     func AABBintersect(px: Float, py: Float){
@@ -219,7 +334,7 @@ class Renderer: NSObject, MTKViewDelegate {
         let rayStart = SIMD3<Float>(xNDC, yNDC, 0.0)
         let rayEnd = SIMD3<Float>(xNDC-0.001, yNDC, 1.0) // make it slightly not parallel
                 
-        let viewProjection = self.sharedResources.projectionMatrix * self.sharedResources.viewMatrix
+        let viewProjection = self.sharedResources.frameUniforms.projection * self.sharedResources.frameUniforms.view
         let inverseViewProjection = simd_inverse(viewProjection)
         
         var worldStart = inverseViewProjection * SIMD4<Float>(rayStart, 1.0)
@@ -277,7 +392,6 @@ class Renderer: NSObject, MTKViewDelegate {
                 }
             }
         }
-        
         self.sharedResources.selectedRenderableInstance = selected
     }
 }
@@ -307,13 +421,9 @@ func gaussianKernel1D(size: Int, sigma: Float) -> [Float] {
     return kernel
 }
 
-// Backwards-compatibility shim: keep the original misspelled name but return 1D
-// If callers expect 2D, they should update to their own separable usage.
 func guassianKernel(size: Int, sigma: Float) -> [Float] {
     return gaussianKernel1D(size: size, sigma: sigma)
 }
-
-
 
 // Generic matrix math utility functions
 func matrix4x4_rotation(radians: Float, axis: SIMD3<Float>) -> matrix_float4x4 {

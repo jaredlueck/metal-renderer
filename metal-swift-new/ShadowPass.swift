@@ -9,7 +9,8 @@ import Metal
 import simd
 
 struct ShadowUniforms {
-    var vp: simd_float4x4
+    var view: simd_float4x4
+    var projection: simd_float4x4
     var position: simd_float4
     var radius: simd_float1
 }
@@ -32,28 +33,34 @@ let faceUps: [SIMD3<Float>] = [
     SIMD3<Float>(0, -1,  0)
 ]
 
-class PointLightShadowPass {
+class ShadowPass {
     let descriptor: MTLRenderPassDescriptor;
-    let pipeline: CubeShadowPipeline
-    init(device: MTLDevice){
+    
+    let cubeShadowMapShaders: ShaderProgram
+    let pipeline: RenderPipeline<Any>
+    let cubeTextureArray: MTLTexture
+    init(device: MTLDevice, colorTexture: MTLTexture){
         self.descriptor = MTLRenderPassDescriptor()
+        self.descriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
         self.descriptor.colorAttachments[0].loadAction = .clear
         self.descriptor.colorAttachments[0].storeAction = .store
         
-        self.pipeline = CubeShadowPipeline(device: device)
+        self.cubeTextureArray = colorTexture
+        
+        try! self.cubeShadowMapShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "cubeShadowMapVertex", fragmentName: "cubeShadowMapFragment"))
+
+        self.pipeline = RenderPipeline<Any>(device: device, program: self.cubeShadowMapShaders, colorAttachmentPixelFormat: .r32Float, depthAttachmentPixelFormat: MTLPixelFormat.invalid)
     }
     
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        let cubeTextureArray = sharedResources.pointLightShadowAtlas!
-        
-        for i in 0..<sharedResources.pointLights.count {
-            let light = sharedResources.pointLights[i]
+        let pointLights = sharedResources.lightData.pointLights
+        for i in 0..<pointLights.count {
+            let light = pointLights[i]
             for face in 0..<6{
                 let slice = i * 6 + face
                 let faceTexture = cubeTextureArray.makeTextureView(
                     pixelFormat: .r32Float, textureType: MTLTextureType.type2D, levels: 0..<1, slices: slice..<(slice+1))
                 self.descriptor.colorAttachments[0].texture = faceTexture
-                self.descriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
                 guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
                     fatalError("failed to create encoder")
                 }
@@ -62,10 +69,14 @@ class PointLightShadowPass {
                 let up = faceUps[face]
                 let view = matrix_lookAt(eye: eyePos, target: eyePos + forward, up: up)
                 let projection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(90), aspectRatio: 1, nearZ: 1, farZ: light.radius)
-                                                               
-                let vp = matrix_multiply(projection, view)
-                
-                pipeline.bind(renderCommandEncoder: encoder, uniforms: ShadowUniforms(vp: vp, position: light.position, radius: light.radius))
+                var uniforms = ShadowUniforms(view: view, projection: projection, position: light.position, radius: light.radius)
+                withUnsafeBytes(of: &uniforms){
+                    rawBuffer in
+                    encoder.setVertexBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
+                    encoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
+                }
+
+                pipeline.bind(encoder: encoder)
                 
                 for i in 0..<sharedResources.renderables.count {
                     let renderable = sharedResources.renderables[i]

@@ -9,7 +9,8 @@ import Metal
 import simd
 
 class MaskPass {
-    let maskPipeline: MaskPipeline
+    let maskShaders: ShaderProgram
+    let maskPipeline: RenderPipeline<Any>
     let device: MTLDevice
     let descriptor: MTLRenderPassDescriptor;
     
@@ -18,7 +19,8 @@ class MaskPass {
         descriptor.colorAttachments[0].clearColor = MTLClearColor.init(red: 0, green: 0, blue: 0, alpha: 1)
         self.descriptor.colorAttachments[0].loadAction = .clear
         self.descriptor.colorAttachments[0].storeAction = .store
-        self.maskPipeline = MaskPipeline(device: device)
+        try! self.maskShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "maskVertex", fragmentName: "maskFragment"))
+        self.maskPipeline = RenderPipeline<Any>(device: device, program: self.maskShaders, colorAttachmentPixelFormat: .r32Float)
         self.device = device
     }
     
@@ -29,11 +31,15 @@ class MaskPass {
         }
         encoder.label = "Mask pass encoder"
         
-        encoder.pushDebugGroup("render selected mesh")
-
-        let maskUniforms = MaskUniforms(view: sharedResources.viewMatrix, projection: sharedResources.projectionMatrix)
+        encoder.pushDebugGroup("render mask of selected object")
+        
+        withUnsafeBytes(of: sharedResources.frameUniforms) { rawBuffer in
+            encoder.setVertexBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameUniforms>.stride,
+                                     index: Bindings.frameUniforms)
+        }
                 
-        self.maskPipeline.bind(renderCommandEncoder: encoder, uniforms: maskUniforms)
+        self.maskPipeline.bind(encoder: encoder)
         
         if let selected = sharedResources.selectedRenderableInstance {
             for renderable in sharedResources.renderables {

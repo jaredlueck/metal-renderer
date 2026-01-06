@@ -6,17 +6,10 @@
 //
 
 #include <metal_stdlib>
+#include "Bindings.h"
+#include "Types.h"
 
 using namespace metal;
-
-struct Uniforms {
-    float4x4 view;
-    float4x4 projection;
-};
-
-struct Material {
-    float3 baseColor;
-};
 
 struct VertexIn {
     float3 position [[attribute(0)]];
@@ -32,11 +25,22 @@ struct VertexOut {
     float3 worldPos;
     float3 worldNormal;
 };
+ 
+struct UniformsAB {
+    float4x4 view;
+    float4x4 projection;
+};
 
 struct PointLight {
     float4 position;
     float4 color;
     float  radius;
+};
+
+struct LightData {
+    const device PointLight* pointLights; // 0, 1, 2
+    texturecube_array<float> pointLightShadowMaps; // 3
+    uint pointLightCount; // 4
 };
 
 float PCF(depth2d<float> shadowMap, uint2 pixel, float receiverDepth, uint kernelSize);
@@ -46,8 +50,8 @@ float3 calculatePointLightColor(PointLight light, float3 fragmentPosition);
 vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
                              uint instance_id [[instance_id]],
                              VertexIn vertexData [[stage_in]],
-                             constant float4x4* instanceData [[buffer(2)]],
-                             constant Uniforms& uniforms [[buffer(0)]]) {
+                             constant float4x4* instanceData [[buffer(BindingsInstanceData)]],
+                             constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]) {
     
     float4x4 model = instanceData[instance_id];
     VertexOut o;
@@ -66,19 +70,17 @@ vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
 }
 
 fragment float4 phongFragment(VertexOut in [[stage_in]],
-                                 texture2d<float> texture [[texture(0)]],
                                  sampler s [[sampler(0)]],
                                  sampler shadowSampler [[sampler(1)]],
-                                 constant Uniforms& uniforms [[buffer(0)]],
-                                 constant PointLight* pointLights [[buffer(2)]],
-                                 texturecube_array<float> pointLightShadowMaps [[texture(1)]],
-                                 constant uint& pointLightCount [[buffer(3)]],
-                                 constant Material& material [[buffer(4)]]) {
+                                 constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]],
+                                 constant PointLight* pointLights [[buffer(BindingsLightBuffer)]],
+                                 texturecube_array<float> shadowAtlas [[texture(BindingsShadowAtlas)]],
+                                 constant Material& material [[buffer(BindingsMaterialData)]]) {
     // Compute normalized view vector from surface to camera in world space
     float3 N = normalize(in.normal);
     float3 V = normalize(-in.viewPos);
         
-    float3 ambient = 0.2 * material.baseColor;
+    float3 ambient = 0.2 * material.baseColor.xyz;
     float3 diffuse = float3(0);
     float3 specular = float3(0);
         
@@ -93,7 +95,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
     float3 shadowDir = normalize(in.worldPos - light.position.xyz);
 
     // Sample normalized distance from the cube array using the NON-compare shadow sampler
-    float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(pointLightShadowMaps, shadowSampler, shadowDir, receiverDepth, in.worldNormal,  0, 3);
+    float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal,  0, 3);
 //    float shadowFactor = pointLightShadowMaps.sample(shadowSampler, shadowDir, 0).r;
     
     
@@ -102,7 +104,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
     float lightDiffuse = max(dot(N, L), 0.0);
     float lightSpec = pow(max(dot(N, H), 0.0), 64);
     
-    diffuse += shadowFactor * lightDiffuse * material.baseColor * lightColor;
+    diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
     specular +=  shadowFactor * lightSpec * lightColor;
 
     float3 result = ambient + diffuse; // + specular if desired

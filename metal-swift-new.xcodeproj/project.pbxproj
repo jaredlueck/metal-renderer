@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F5F268F2F0A03C400A07F1B /* ImGui in Frameworks */ = {isa = PBXBuildFile; productRef = 0F5F268E2F0A03C400A07F1B /* ImGui */; };
 		0F628D672F08AD13001EEC60 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 0F628D662F08AD08001EEC60 /* .gitignore */; };
 /* End PBXBuildFile section */
 
@@ -28,6 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0F5F268F2F0A03C400A07F1B /* ImGui in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			);
 			name = "metal-swift-new";
 			packageProductDependencies = (
+				0F5F268E2F0A03C400A07F1B /* ImGui */,
 			);
 			productName = "metal-swift-new";
 			productReference = 0F5B445B2EE7DC94006C3F8B /* metal-swift-new.app */;
@@ -88,6 +91,7 @@
 				TargetAttributes = {
 					0F5B445A2EE7DC94006C3F8B = {
 						CreatedOnToolsVersion = 26.1;
+						LastSwiftMigration = 2610;
 					};
 				};
 			};
@@ -102,6 +106,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				0F74AB132F023F9200E7A5A7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
+				0F5F268D2F0A03C400A07F1B /* XCRemoteSwiftPackageReference "SwiftImGui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0F5B445C2EE7DC94006C3F8B /* Products */;
@@ -258,12 +263,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = "";
@@ -281,6 +288,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -291,12 +299,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = "";
@@ -343,6 +353,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0F5F268D2F0A03C400A07F1B /* XCRemoteSwiftPackageReference "SwiftImGui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ctreffs/SwiftImGui.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.89.5;
+			};
+		};
 		0F74AB132F023F9200E7A5A7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
@@ -352,6 +370,14 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0F5F268E2F0A03C400A07F1B /* ImGui */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0F5F268D2F0A03C400A07F1B /* XCRemoteSwiftPackageReference "SwiftImGui" */;
+			productName = ImGui;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0F5B44532EE7DC94006C3F8B /* Project object */;
 }

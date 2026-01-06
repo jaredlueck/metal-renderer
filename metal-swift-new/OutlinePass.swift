@@ -11,50 +11,63 @@ import simd
 import Metal
 
 class OutlinePass {
-    let pipeline: OutlinePipeline
-    let device: MTLDevice
-    let descriptor: MTLComputePassDescriptor;
+    let outlineShaders: ShaderProgram
+    let outlinePipeline: RenderPipeline<Any>
     
-    init(device: MTLDevice){
-        self.descriptor = MTLComputePassDescriptor()
-        self.pipeline = OutlinePipeline(device: device)
+    let gridShaders: ShaderProgram
+    let gridPipeline: RenderPipeline<Any>
+    
+    let device: MTLDevice
+    let descriptor: MTLRenderPassDescriptor;
+    
+    init(device: MTLDevice, colorTexture: MTLTexture, depthTexture: MTLTexture){
+        self.descriptor = MTLRenderPassDescriptor()
+        self.descriptor.colorAttachments[0].texture = colorTexture
+        self.descriptor.colorAttachments[0].loadAction = .load
+        self.descriptor.colorAttachments[0].storeAction = .store
+        self.descriptor.depthAttachment.texture = depthTexture
+        self.descriptor.depthAttachment.loadAction = .load
+
+        try! self.outlineShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "outlineVertex", fragmentName: "outlineFragment"))
+        self.outlinePipeline = RenderPipeline<Any>(device: device, program: self.outlineShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        
+        try! self.gridShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "gridVertex", fragmentName: "gridFragment"))
+        self.gridPipeline = RenderPipeline<Any>(device: device, program: self.gridShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+
         self.device = device
     }
     
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        guard let encoder = commandBuffer.makeComputeCommandEncoder(descriptor: self.descriptor) else {
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
             fatalError("Failed to create render command encoder")
         }
-        encoder.label = "mask outline compute pass encoder"
+        encoder.label = "mask outline encoder"
+        
+        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
+        
+        withUnsafeBytes(of: sharedResources.frameUniforms) { rawBuffer in
+            encoder.setVertexBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameUniforms>.stride,
+                                     index: Bindings.frameUniforms)
+        }
                 
-        encoder.setTexture(sharedResources.outlineMask, index: 0)
-        
-        encoder.setTexture(sharedResources.colorBuffer, index: 1)
-        
-        let outlineDesc = MTLTextureDescriptor()
-        outlineDesc.textureType = .type2D
-        outlineDesc.pixelFormat = .bgra8Unorm_srgb
-        outlineDesc.width = sharedResources.colorBuffer?.width ?? 1024
-        outlineDesc.height = sharedResources.colorBuffer?.height ?? 1014
-        outlineDesc.usage = [.shaderWrite, .shaderRead]
-        
-        let outlineTex = device.makeTexture(descriptor: outlineDesc)
-        
-        encoder.setTexture(outlineTex, index: 2)
-        var outlineColor = SIMD4<Float>(0, 1, 0, 1)
-        encoder.setBytes(&outlineColor, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-        
-        self.pipeline.bind(encoder: encoder)
-        
-        let threadsPerThreadgroup = MTLSize(width: 1, height: 1, depth: 1)
+        encoder.setFragmentTexture(sharedResources.outlineMask, index: 0)
 
-        let threadsPerGrid = MTLSize(width: outlineDesc.width,
-                                     height: outlineDesc.height,
-                                     depth: 1)
+        var outlineColor = SIMD4<Float>(0, 1, 0, 1)
+        encoder.setFragmentBytes(&outlineColor, length: MemoryLayout<SIMD4<Float>>.stride, index: Bindings.pipelineUniforms)
         
-        sharedResources.colorBuffer = outlineTex
+        self.outlinePipeline.bind(encoder: encoder)
         
-        encoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
+        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
+        
+        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
+        
+        encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
+        
+        self.gridPipeline.bind(encoder: encoder)
+        
+        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
+        
         encoder.endEncoding()
         
     }

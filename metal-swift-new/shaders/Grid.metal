@@ -5,13 +5,12 @@
 //  Created by Jared Lueck on 2026-01-02.
 //
 #include <metal_stdlib>
+#include "Types.h"
+#include "Bindings.h"
 using namespace metal;
 
-struct Uniforms {
-    float4x4 view;
-    float4x4 projection;
-    float4 gridColor;
-    float4 cameraPos;
+struct GridUniforms {
+    float4 baseColor;
 };
 
 struct VSOut {
@@ -19,12 +18,8 @@ struct VSOut {
     float3 worldPos;
 };
 
-bool isWholeNumber(float x) {
-    return abs(x - floor(x)) < 1e-1;
-}
-
-vertex VSOut gridVertex(uint vid [[vertex_id]], constant Uniforms& uniforms [[buffer(0)]]){
-    float4 cameraPos = uniforms.cameraPos;
+vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]){
+    float4 cameraPos = uniforms.cameraPosition;
     // Construct a plane on y=0 extending +/-100 around the camera's x and z
     float camX = cameraPos.x;
     float camZ = cameraPos.z;
@@ -47,13 +42,13 @@ vertex VSOut gridVertex(uint vid [[vertex_id]], constant Uniforms& uniforms [[bu
     return o;
 }
 
-fragment float4 gridFragment(VSOut in [[stage_in]], constant Uniforms& uniforms [[buffer(0)]]){
+fragment float4 gridFragment(VSOut in [[stage_in]], constant float4& baseColor [[buffer(BindingsPipelineUniforms)]]){
     float3 pos = in.worldPos;
     float eps = 1e-1;
-    if(fract(pos.x) < eps || fract(pos.z) < eps){
-        // we are on an even number so we are on the grid
-        return uniforms.gridColor;
+    bool onGrid = fract(pos.x) < eps || fract(pos.z) < eps;
+    if (!onGrid) {
+        discard_fragment(); // No color or depth written
     }
-    discard_fragment();
+    return baseColor;
 }
 

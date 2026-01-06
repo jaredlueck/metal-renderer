@@ -28,11 +28,10 @@ struct VertexOut {
 };
 
 vertex VertexOut shadowVertex(uint vertex_id [[vertex_id]],
+                              uint instance_id [[instance_id]],
                                VertexIn vertexData [[stage_in]],
                                constant Uniforms& uniforms [[buffer(0)]],
-                               uint instance_id [[instance_id]],
                                constant float4x4* instanceData [[buffer(2)]]) {
-
     VertexOut o;
     float4x4 model = instanceData[instance_id];
     float4 localPos = float4(vertexData.position, 1.0);

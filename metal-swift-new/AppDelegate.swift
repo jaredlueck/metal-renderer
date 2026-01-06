@@ -13,17 +13,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Create and show the main application window programmatically
-        let frame = NSMakeRect(0, 0, 800, 600)
+        let frame = NSMakeRect(0, 0, 1000, 1000)
         self.window = NSWindow(
             contentRect:frame,
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.center()
         window.title = "metal-swift-new"
         let viewController = GameViewController()
-        viewController.frame = self.window.frame
         window.contentViewController = viewController
         window.makeKeyAndOrderFront(nil)
     }

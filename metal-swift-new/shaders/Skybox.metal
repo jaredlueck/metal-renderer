@@ -6,18 +6,14 @@
 //
 
 #include <metal_stdlib>
+#include "Types.h"
+#include "Bindings.h"
+
 using namespace metal;
 
 struct VSOut {
     float4 position [[position]];
     float2 ndc;
-};
-
-struct Uniforms {
-    float4x4 view;
-    float4x4 projection;
-    float4x4 inverseView;
-    float4x4 inverseProjection;
 };
 
 vertex VSOut skyboxVertex(uint vid [[vertex_id]]) {
@@ -35,7 +31,7 @@ vertex VSOut skyboxVertex(uint vid [[vertex_id]]) {
 fragment float4 skyboxFragment(VSOut in [[stage_in]],
                               texturecube<float> skyTex [[texture(0)]],
                               sampler samp [[sampler(0)]],
-                              constant Uniforms& uniforms [[buffer(0)]]) {
+                              constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]) {
     float4 clip = float4(in.ndc, 1.0, 1.0);
     float3 viewPos = normalize((uniforms.inverseProjection * clip).xyz);
     float4 worldDir = normalize((uniforms.inverseView) * float4(viewPos, 0.0));
