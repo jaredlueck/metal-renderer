@@ -23,5 +23,5 @@ class Model {
         } catch {
             fatalError("Failed to create MTKMesh from asset: \(error)")
         }
-            }
+    }
 }

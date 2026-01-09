@@ -7,7 +7,7 @@
 
 import Metal
 
-class RenderPipeline<Uniforms>{
+class RenderPipeline{
     public let vertexFunction: MTLFunction
     public let fragmentFunction: MTLFunction
     let pipelineState: MTLRenderPipelineState
@@ -20,6 +20,7 @@ class RenderPipeline<Uniforms>{
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.colorAttachments[0].pixelFormat = colorAttachmentPixelFormat
         pipelineDescriptor.depthAttachmentPixelFormat = depthAttachmentPixelFormat
+
         if let vertexDescriptor = vertexDescriptor {
             pipelineDescriptor.vertexDescriptor = vertexDescriptor
         }
@@ -33,6 +34,5 @@ class RenderPipeline<Uniforms>{
     
     func bind(encoder: MTLRenderCommandEncoder) {
         encoder.setRenderPipelineState(pipelineState)
-
     }
 }

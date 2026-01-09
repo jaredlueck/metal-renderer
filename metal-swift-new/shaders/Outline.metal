@@ -67,8 +67,6 @@ fragment float4 outlineFragment(VertexOut in [[stage_in]],
             }
         }
     }
-
-    // Nothing nearby — skip drawing
     discard_fragment();
 }
 

@@ -13,7 +13,8 @@ class GameViewController: NSViewController {
 
     var renderer: Renderer!
     var mtkView: MTKView!
-
+    var dragging = true
+    
     override func viewDidLoad() {
         super.viewDidLoad()
                         
@@ -51,10 +52,9 @@ class GameViewController: NSViewController {
         ImGui_ImplOSX_Init(view)
 
     }
-    
 
-    
     override func mouseUp(with event: NSEvent){
+        print("MOUSEUP")
         ImGui_ImplOSX_HandleEvent(event, view)
         guard let mtkView = self.mtkView else { return }
         let windowPoint = event.locationInWindow
@@ -63,8 +63,6 @@ class GameViewController: NSViewController {
         let scale = mtkView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1.0
         let pixelPoint = CGPoint(x: viewPoint.x * scale, y: viewPoint.y * scale)
 
-        let size = mtkView.drawableSize
-
         let px = Float(pixelPoint.x)
         let py = Float(pixelPoint.y)
 
@@ -72,14 +70,37 @@ class GameViewController: NSViewController {
     }
     
     override func mouseDown(with event: NSEvent) {
+        print("MOUSEDOWN")
+
         ImGui_ImplOSX_HandleEvent(event, view)
     }
     
     override func mouseMoved(with event: NSEvent) {
         ImGui_ImplOSX_HandleEvent(event, view)
     }
-    
+        
     override func mouseDragged(with event: NSEvent) {
+        print("DRAGGED: event.deltaX: \(event.deltaX), event.deltaY: \(event.deltaY)")
+        let scale = mtkView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1.0
+        let pixelPoint = CGPoint(x: event.deltaX * scale, y: event.deltaY * scale)
+        let dx = Float(pixelPoint.x)
+        let dy = -Float(pixelPoint.y)
+        if(renderer.sharedResources.selectedRenderableInstance != nil){
+            renderer.updateSelectedObjectTransform(deltaX: dx, deltaY: dy)
+        }
         ImGui_ImplOSX_HandleEvent(event, view)
+        
+    }
+    
+    override func scrollWheel(with event: NSEvent) {
+        let dx = event.scrollingDeltaX * 0.01
+        let dy = event.scrollingDeltaY * 0.01
+        renderer.updateCameraTransform(deltaX: Float(dx), deltaY: Float(dy))
+    }
+    
+    override func magnify(with event: NSEvent) {
+        let delta = Float(event.magnification)
+        let zoom = delta * 1
+        renderer.updateCameraTransform(zoom: zoom)
     }
 }

@@ -28,13 +28,13 @@ vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms
     float4x4 projection = uniforms.projection;
     VSOut o;
     float3 vertices[6] = {
-        float3(camX - extent, 0.0, camZ - extent), // BL
-        float3(camX + extent, 0.0, camZ - extent), // BR
-        float3(camX + extent, 0.0, camZ + extent), // TR
+        float3(camX - extent, -0.1, camZ - extent), // BL
+        float3(camX + extent, -0.1, camZ - extent), // BR
+        float3(camX + extent, -0.1, camZ + extent), // TR
 
-        float3(camX - extent, 0.0, camZ - extent), // BL
-        float3(camX + extent, 0.0, camZ + extent), // TR
-        float3(camX - extent, 0.0, camZ + extent)  // TL
+        float3(camX - extent, -0.1, camZ - extent), // BL
+        float3(camX + extent, -0.1, camZ + extent), // TR
+        float3(camX - extent, -0.1, camZ + extent)  // TL
     };
     o.worldPos = vertices[vid].xyz;
     o.position = projection * view * float4(vertices[vid], 1.0);
@@ -44,11 +44,20 @@ vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms
 
 fragment float4 gridFragment(VSOut in [[stage_in]], constant float4& baseColor [[buffer(BindingsPipelineUniforms)]]){
     float3 pos = in.worldPos;
-    float eps = 1e-1;
-    bool onGrid = fract(pos.x) < eps || fract(pos.z) < eps;
-    if (!onGrid) {
-        discard_fragment(); // No color or depth written
+    float eps = 0.015;
+
+    bool onXaxis = abs(pos.y + 0.1) < eps &&  abs(pos.z) < eps;
+    bool onZaxis = abs(pos.x) < eps && abs(pos.y + 0.1) < eps;
+    if(onXaxis){
+        return float4(1.0, 0.0, 0.0, 1.0);
     }
-    return baseColor;
+    if(onZaxis){
+        return float4(0.0, 0.0, 1.0, 1.0);
+    }
+    bool onGridXZPlane = fract(pos.x) < eps || fract(pos.z) < eps;
+    if (onGridXZPlane) {
+        return baseColor;
+    }
+    discard_fragment(); // No color or depth written
 }
 

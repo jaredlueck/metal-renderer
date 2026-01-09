@@ -37,23 +37,21 @@ class ShadowPass {
     let descriptor: MTLRenderPassDescriptor;
     
     let cubeShadowMapShaders: ShaderProgram
-    let pipeline: RenderPipeline<Any>
-    let cubeTextureArray: MTLTexture
-    init(device: MTLDevice, colorTexture: MTLTexture){
+    let pipeline: RenderPipeline
+    init(device: MTLDevice){
         self.descriptor = MTLRenderPassDescriptor()
         self.descriptor.colorAttachments[0].clearColor = MTLClearColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
         self.descriptor.colorAttachments[0].loadAction = .clear
         self.descriptor.colorAttachments[0].storeAction = .store
-        
-        self.cubeTextureArray = colorTexture
-        
+                
         try! self.cubeShadowMapShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "cubeShadowMapVertex", fragmentName: "cubeShadowMapFragment"))
 
-        self.pipeline = RenderPipeline<Any>(device: device, program: self.cubeShadowMapShaders, colorAttachmentPixelFormat: .r32Float, depthAttachmentPixelFormat: MTLPixelFormat.invalid)
+        self.pipeline = RenderPipeline(device: device, program: self.cubeShadowMapShaders, colorAttachmentPixelFormat: .r32Float, depthAttachmentPixelFormat: MTLPixelFormat.invalid)
     }
     
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        let pointLights = sharedResources.lightData.pointLights
+        let pointLights = sharedResources.pointLights
+        let cubeTextureArray = sharedResources.pointLightShadowAtlas
         for i in 0..<pointLights.count {
             let light = pointLights[i]
             for face in 0..<6{

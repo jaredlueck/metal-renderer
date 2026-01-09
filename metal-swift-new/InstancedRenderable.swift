@@ -12,10 +12,15 @@ struct Material {
     let baseColor: SIMD3<Float>
 }
 
-struct Instance {
+class Instance {
     var id: String
     var transform: simd_float4x4
     var selected: Bool = false
+    
+    init(id: String, transform: simd_float4x4) {
+        self.id = id
+        self.transform = transform
+    }
 }
 
 class InstancedRenderable {

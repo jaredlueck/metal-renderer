@@ -8,32 +8,35 @@
 import Metal
 import simd
 
-class ColorPassx {
+class ColorPass {
     let descriptor: MTLRenderPassDescriptor;
     let device: MTLDevice
     
+    let colorAttachmentPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
+    let depthAttachmentPixelFormat = MTLPixelFormat.depth32Float
+    
     let skyboxShaders: ShaderProgram
-    let skyboxPipeline: RenderPipeline<SkyBoxUniforms>
+    let skyboxPipeline: RenderPipeline
     
     let blinnPhongShaders: ShaderProgram
-    let blinnPhongPipeline: RenderPipeline<Any>
+    let blinnPhongPipeline: RenderPipeline
     
     let sampler: MTLSamplerState
     
-    init(device: MTLDevice, depthTexture: MTLTexture, colorTexture: MTLTexture) {
+    init(device: MTLDevice) {
         self.descriptor = MTLRenderPassDescriptor();
-        self.descriptor.depthAttachment.texture = depthTexture
+//        self.descriptor.depthAttachment.texture = depthTexture
         self.descriptor.depthAttachment.storeAction = .store
         self.descriptor.depthAttachment.clearDepth = 1.0
-        self.descriptor.colorAttachments[0].texture = colorTexture
+//        self.descriptor.colorAttachments[0].texture = colorTexture
         
         self.device = device
 
         self.skyboxShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "skyboxVertex", fragmentName: "skyboxFragment"))
-        self.skyboxPipeline = RenderPipeline<SkyBoxUniforms>(device: self.device, program: self.skyboxShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: colorTexture.pixelFormat, depthAttachmentPixelFormat: depthTexture.pixelFormat)
+        self.skyboxPipeline = RenderPipeline(device: self.device, program: self.skyboxShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: colorAttachmentPixelFormat, depthAttachmentPixelFormat: depthAttachmentPixelFormat)
 
         self.blinnPhongShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "phongVertex", fragmentName: "phongFragment"))
-        self.blinnPhongPipeline = RenderPipeline<Any>(device: self.device, program: self.blinnPhongShaders, colorAttachmentPixelFormat: colorTexture.pixelFormat, depthAttachmentPixelFormat: depthTexture.pixelFormat)
+        self.blinnPhongPipeline = RenderPipeline(device: self.device, program: self.blinnPhongShaders, colorAttachmentPixelFormat: colorAttachmentPixelFormat, depthAttachmentPixelFormat: depthAttachmentPixelFormat)
         
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
@@ -45,14 +48,24 @@ class ColorPassx {
         self.sampler = sampler
     }
     
+    func setColorAttachment(colorTexture: MTLTexture) {
+        self.descriptor.colorAttachments[0].texture = colorTexture
+    }
+    
+    func setDepthAttachment(depthTexture: MTLTexture) {
+        self.descriptor.depthAttachment.texture = depthTexture
+    }
+    
     func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
+        self.descriptor.depthAttachment.texture = sharedResources.depthBuffer
+        self.descriptor.colorAttachments[0].texture = sharedResources.colorBuffer
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
             fatalError("failed to create encoder")
         }
         encoder.label = "Color pass encoder"
         
         // Set common uniforms
-        withUnsafeBytes(of: sharedResources.frameUniforms) { rawBuffer in
+        withUnsafeBytes(of: sharedResources.makeFrameUniforms()) { rawBuffer in
             encoder.setFragmentBytes(rawBuffer.baseAddress!,
                                            length: MemoryLayout<FrameUniforms>.stride,
                                      index: Bindings.frameUniforms)
@@ -82,7 +95,8 @@ class ColorPassx {
         
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
         
-        let pointLights = sharedResources.lightData.pointLights
+        let pointLights = sharedResources.pointLights
+        
                 
         let lightBuffer = pointLights.withUnsafeBufferPointer { bufferPtr in
              return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * pointLights.count)
@@ -90,10 +104,8 @@ class ColorPassx {
         
         encoder.setFragmentBuffer(lightBuffer, offset: 0, index: Bindings.lightData)
         
-        encoder.setFragmentTexture(sharedResources.lightData.pontLightShadowAtlas, index: Bindings.shadowAtas)
-        
-//        encoder.setFragmentBytes(&pointLightCount, length: MemoryLayout<UInt32>.stride, index: 1)
-        
+        encoder.setFragmentTexture(sharedResources.pointLightShadowAtlas, index: Bindings.shadowAtas)
+
         self.blinnPhongPipeline.bind(encoder: encoder)
         
         for i in 0..<sharedResources.renderables.count {

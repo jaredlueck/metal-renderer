@@ -10,7 +10,7 @@ import simd
 
 class MaskPass {
     let maskShaders: ShaderProgram
-    let maskPipeline: RenderPipeline<Any>
+    let maskPipeline: RenderPipeline
     let device: MTLDevice
     let descriptor: MTLRenderPassDescriptor;
     
@@ -20,7 +20,7 @@ class MaskPass {
         self.descriptor.colorAttachments[0].loadAction = .clear
         self.descriptor.colorAttachments[0].storeAction = .store
         try! self.maskShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "maskVertex", fragmentName: "maskFragment"))
-        self.maskPipeline = RenderPipeline<Any>(device: device, program: self.maskShaders, colorAttachmentPixelFormat: .r32Float)
+        self.maskPipeline = RenderPipeline(device: device, program: self.maskShaders, colorAttachmentPixelFormat: .r32Float)
         self.device = device
     }
     
@@ -33,7 +33,7 @@ class MaskPass {
         
         encoder.pushDebugGroup("render mask of selected object")
         
-        withUnsafeBytes(of: sharedResources.frameUniforms) { rawBuffer in
+        withUnsafeBytes(of: sharedResources.makeFrameUniforms()) { rawBuffer in
             encoder.setVertexBytes(rawBuffer.baseAddress!,
                                            length: MemoryLayout<FrameUniforms>.stride,
                                      index: Bindings.frameUniforms)

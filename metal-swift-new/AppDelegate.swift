@@ -16,7 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = NSMakeRect(0, 0, 1000, 1000)
         self.window = NSWindow(
             contentRect:frame,
-            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
