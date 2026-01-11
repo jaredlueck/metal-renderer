@@ -15,11 +15,12 @@ struct Material {
 class Instance {
     var id: String
     var transform: simd_float4x4
-    var selected: Bool = false
+    var renderable: InstancedRenderable
     
-    init(id: String, transform: simd_float4x4) {
+    init(id: String, transform: simd_float4x4, renderable: InstancedRenderable) {
         self.id = id
         self.transform = transform
+        self.renderable = renderable
     }
 }
 
@@ -47,7 +48,7 @@ class InstancedRenderable {
 
     func addInstance(transform: simd_float4x4) {
         let id = UUID().uuidString
-        instances.append(Instance(id: id, transform: transform))
+        instances.append(Instance(id: id, transform: transform, renderable: self))
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
@@ -95,7 +96,6 @@ class InstancedRenderable {
                         indexType = .uint32
                     }
 
-                    // MDLSubmesh.indexBuffer is an MDLMeshBuffer; bridge to MTKMeshBuffer if possible
                     if let mtkIndexBuffer = mdlSubmesh.indexBuffer as? MTKMeshBuffer {
                         renderEncoder.drawIndexedPrimitives(
                             type: .triangle,

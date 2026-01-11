@@ -80,7 +80,7 @@ class Renderer: NSObject, MTKViewDelegate {
         colorPass.setDepthAttachment(depthTexture: sharedResources.depthBuffer)
         maskPass = MaskPass(device: device)
         shadowPass = ShadowPass(device: device)
-        outlinePass = OutlinePass(device: device)
+        outlinePass = Editor(device: device, view: view)
         imguiPass = ImguiPass(device: device)
 
         super.init()
@@ -110,7 +110,7 @@ class Renderer: NSObject, MTKViewDelegate {
         colorPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         maskPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         outlinePass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
-        imguiPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
+//        imguiPass.encode(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         
         let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
         
@@ -143,6 +143,8 @@ class Renderer: NSObject, MTKViewDelegate {
         sharedResources.colorBuffer = device.makeTexture(descriptor: sharedResources.colorTextureDescriptor)!
     }
     
+    // Cast a ray from the camera mouse click position into the screen and calculate
+    // if it intersects with any objects in the scene.
     func AABBintersect(px: Float, py: Float){
         let size = view.drawableSize
         let width = Float(size.width)

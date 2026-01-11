@@ -18,7 +18,6 @@ class GameViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
                         
-        // Select the device to render with.  We choose the default device
         guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
             print("Metal is not supported on this device")
             return
@@ -50,11 +49,9 @@ class GameViewController: NSViewController {
         mtkView.delegate = renderer
         
         ImGui_ImplOSX_Init(view)
-
     }
 
     override func mouseUp(with event: NSEvent){
-        print("MOUSEUP")
         ImGui_ImplOSX_HandleEvent(event, view)
         guard let mtkView = self.mtkView else { return }
         let windowPoint = event.locationInWindow
@@ -70,8 +67,6 @@ class GameViewController: NSViewController {
     }
     
     override func mouseDown(with event: NSEvent) {
-        print("MOUSEDOWN")
-
         ImGui_ImplOSX_HandleEvent(event, view)
     }
     
@@ -80,7 +75,6 @@ class GameViewController: NSViewController {
     }
         
     override func mouseDragged(with event: NSEvent) {
-        print("DRAGGED: event.deltaX: \(event.deltaX), event.deltaY: \(event.deltaY)")
         let scale = mtkView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1.0
         let pixelPoint = CGPoint(x: event.deltaX * scale, y: event.deltaY * scale)
         let dx = Float(pixelPoint.x)
@@ -103,4 +97,5 @@ class GameViewController: NSViewController {
         let zoom = delta * 1
         renderer.updateCameraTransform(zoom: zoom)
     }
+    
 }
