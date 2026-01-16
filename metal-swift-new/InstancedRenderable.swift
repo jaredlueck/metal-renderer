@@ -15,12 +15,12 @@ struct Material {
 class Instance {
     var id: String
     var transform: simd_float4x4
-    var renderable: InstancedRenderable
+//    var renderable: InstancedRenderable
     
     init(id: String, transform: simd_float4x4, renderable: InstancedRenderable) {
         self.id = id
         self.transform = transform
-        self.renderable = renderable
+//        self.renderable = renderable
     }
 }
 

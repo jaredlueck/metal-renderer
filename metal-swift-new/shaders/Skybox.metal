@@ -16,7 +16,7 @@ struct VSOut {
     float2 ndc;
 };
 
-vertex VSOut skyboxVertex(uint vid [[vertex_id]]) {
+vertex VSOut full_screen_triangle_vertex(uint vid [[vertex_id]]) {
     float2 verts[3] = {
         float2(-1.0, -3.0),
         float2(-1.0,  1.0),

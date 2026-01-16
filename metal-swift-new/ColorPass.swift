@@ -28,11 +28,13 @@ class ColorPass {
 //        self.descriptor.depthAttachment.texture = depthTexture
         self.descriptor.depthAttachment.storeAction = .store
         self.descriptor.depthAttachment.clearDepth = 1.0
+        self.descriptor.colorAttachments[0].loadAction = .clear
+        
 //        self.descriptor.colorAttachments[0].texture = colorTexture
         
         self.device = device
 
-        self.skyboxShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "skyboxVertex", fragmentName: "skyboxFragment"))
+        self.skyboxShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "full_screen_triangle_vertex", fragmentName: "skyboxFragment"))
         self.skyboxPipeline = RenderPipeline(device: self.device, program: self.skyboxShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: colorAttachmentPixelFormat, depthAttachmentPixelFormat: depthAttachmentPixelFormat)
 
         self.blinnPhongShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "phongVertex", fragmentName: "phongFragment"))
@@ -56,7 +58,7 @@ class ColorPass {
         self.descriptor.depthAttachment.texture = depthTexture
     }
     
-    func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
+    func encode(commandBuffer: MTLCommandBuffer,  pointLights: [PointLight], renderables: [InstancedRenderable], sharedResources: inout SharedResources){
         self.descriptor.depthAttachment.texture = sharedResources.depthBuffer
         self.descriptor.colorAttachments[0].texture = sharedResources.colorBuffer
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
@@ -75,45 +77,38 @@ class ColorPass {
         }
         
         encoder.setFragmentSamplerState(sharedResources.sampler, index: Bindings.sampler)
-        
         encoder.setFragmentSamplerState(sharedResources.shadowSampler, index: Bindings.shadowSampler)
-        
-        encoder.pushDebugGroup("Draw Skybox")
-        
-        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
-        
-        encoder.setFragmentTexture(sharedResources.skyBoxTexture, index: 0)
-        encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
-                
-        self.skyboxPipeline.bind(encoder: encoder)
-        
-        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
-        
-        encoder.popDebugGroup()
+//        
+//        encoder.pushDebugGroup("Draw Skybox")
+//        
+//        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
+//        
+//        encoder.setFragmentTexture(sharedResources.skyBoxTexture, index: 0)
+//        encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
+//                
+//        self.skyboxPipeline.bind(encoder: encoder)
+//        
+//        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
+//        
+//        encoder.popDebugGroup()
                 
         encoder.pushDebugGroup("render meshes")
-        
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
-        
-        let pointLights = sharedResources.pointLights
-        
-                
+                        
         let lightBuffer = pointLights.withUnsafeBufferPointer { bufferPtr in
              return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * pointLights.count)
         }
         
         encoder.setFragmentBuffer(lightBuffer, offset: 0, index: Bindings.lightData)
-        
         encoder.setFragmentTexture(sharedResources.pointLightShadowAtlas, index: Bindings.shadowAtas)
 
         self.blinnPhongPipeline.bind(encoder: encoder)
         
-        for i in 0..<sharedResources.renderables.count {
-            let renderable = sharedResources.renderables[i]
+        for i in 0..<renderables.count {
+            let renderable = renderables[i]
             renderable.draw(renderEncoder: encoder, instanceId: nil)
         }
         encoder.popDebugGroup()
-        
         encoder.endEncoding()
     }
 }

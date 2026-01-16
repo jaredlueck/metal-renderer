@@ -146,11 +146,7 @@ final class SharedResources{
                       cameraPos: cameraPos)
     }
 
-    public func makeLightData() -> LightData {
-        LightData(pointLights: pointLights,
-                  pontLightShadowAtlas: pointLightShadowAtlas,
-                  lightCount: lightCount)
-    }
+
 
     public func addPointLight(_ newValue: PointLight) {
         pointLights.append(newValue)

@@ -49,9 +49,8 @@ class ShadowPass {
         self.pipeline = RenderPipeline(device: device, program: self.cubeShadowMapShaders, colorAttachmentPixelFormat: .r32Float, depthAttachmentPixelFormat: MTLPixelFormat.invalid)
     }
     
-    func encode(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        let pointLights = sharedResources.pointLights
-        let cubeTextureArray = sharedResources.pointLightShadowAtlas
+    func encode(commandBuffer: MTLCommandBuffer, lights: [PointLight], cubeTextureArray: MTLTexture, shadowCasters: [InstancedRenderable]){
+        let pointLights = lights
         for i in 0..<pointLights.count {
             let light = pointLights[i]
             for face in 0..<6{
@@ -76,11 +75,9 @@ class ShadowPass {
 
                 pipeline.bind(encoder: encoder)
                 
-                for i in 0..<sharedResources.renderables.count {
-                    let renderable = sharedResources.renderables[i]
-                    if renderable.castsShadows {
-                        renderable.draw(renderEncoder: encoder, instanceId: nil)
-                    }
+                for i in 0..<shadowCasters.count {
+                    let renderable = shadowCasters[i]
+                    renderable.draw(renderEncoder: encoder, instanceId: nil)
                 }
                 encoder.endEncoding()
             }

@@ -1,0 +1,8 @@
+{
+    "assets": [
+        {
+            "id": "sphere",
+            "path": "./sphere.obj"
+        }
+    ]
+}

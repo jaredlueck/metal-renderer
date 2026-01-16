@@ -14,6 +14,5 @@ enum Bindings {
     static let pipelineUniforms = 5
     static let sampler = 0
     static let shadowSampler = 1
-    
     static let shadowAtas = 0
 }

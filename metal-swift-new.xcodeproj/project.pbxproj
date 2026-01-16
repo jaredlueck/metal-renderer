@@ -16,9 +16,23 @@
 		0F628D662F08AD08001EEC60 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-swift-new" folder in "metal-swift-new" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				assets/textures/brick.jpg,
+				"gen-bindings.py",
+			);
+			target = 0F5B445A2EE7DC94006C3F8B /* metal-swift-new */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0F5B445D2EE7DC94006C3F8B /* metal-swift-new */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-swift-new" folder in "metal-swift-new" target */,
+			);
 			path = "metal-swift-new";
 			sourceTree = "<group>";
 		};
@@ -264,6 +278,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -299,6 +314,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
