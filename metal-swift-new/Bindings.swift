@@ -12,7 +12,10 @@ enum Bindings {
     static let instanceData = 3
     static let materialData = 4
     static let pipelineUniforms = 5
+    
     static let sampler = 0
     static let shadowSampler = 1
+    
     static let shadowAtas = 0
+    static let baseTexture = 1
 }

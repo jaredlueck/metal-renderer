@@ -5,13 +5,14 @@
 typedef enum Bindings : unsigned int {
     BindingsVertexBuffer = 0,
     BindingsFrameUniforms = 1,
-    BindingsLightBuffer = 2,
+    BindingsLightData = 2,
     BindingsInstanceData = 3,
     BindingsMaterialData = 4,
     BindingsPipelineUniforms = 5,
-    BindingsShadowAtlas = 0,
     BindingsSampler = 0,
-    BindingsShadowSampler = 1
+    BindingsShadowSampler = 1,
+    BindingsShadowAtas = 0,
+    BindingsBaseTexture = 1
 } Bindings;
 
 #endif /* BINDINGS_H_GENERATED */

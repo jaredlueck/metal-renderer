@@ -18,9 +18,10 @@ struct FrameUniforms {
     var inverseView: simd_float4x4 =  matrix_identity_float4x4
     var inverseProjection: simd_float4x4  = matrix_identity_float4x4
     var cameraPos: simd_float4 = SIMD4<Float>(0, -1, 5.1, 1)
+    var viewportSize: simd_float2 = .init(1, 1)
 }
 
-struct PointLight {
+public struct PointLight {
     var position: simd_float4
     var color: simd_float4
     var radius: simd_float1
@@ -154,4 +155,3 @@ class Renderer: NSObject, MTKViewDelegate {
         sharedResources.colorBuffer = device.makeTexture(descriptor: sharedResources.colorTextureDescriptor)!
     }
 }
-

@@ -39,6 +39,9 @@ class Editor {
     let maskShaders: ShaderProgram
     let maskPipeline: RenderPipeline
     
+    let canvasShader: ShaderProgram
+    let canvasPipeline: RenderPipeline
+    
     let device: MTLDevice
     let descriptor: MTLRenderPassDescriptor;
     
@@ -61,6 +64,73 @@ class Editor {
     
     var assetURLs: [URL]
     
+    let spotLightTexture: MTLTexture
+    
+    let sampler: MTLSamplerState
+    
+    init(device: MTLDevice, view: MTKView, scene: Scene, assetManager: AssetManager){
+        self.descriptor = MTLRenderPassDescriptor()
+        self.descriptor.colorAttachments[0].loadAction = .load
+        self.descriptor.colorAttachments[0].storeAction = .store
+        self.descriptor.depthAttachment.loadAction = .load
+        
+        
+        self.hudRenderPassDescriptor = MTLRenderPassDescriptor()
+        self.hudRenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor.init(red: 0, green: 0, blue: 0, alpha: 1)
+        self.hudRenderPassDescriptor.colorAttachments[0].loadAction = .clear
+        self.hudRenderPassDescriptor.colorAttachments[0].storeAction = .store
+                
+        try! self.maskShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "maskVertex", fragmentName: "maskFragment"))
+        self.maskPipeline = RenderPipeline(device: device, program: self.maskShaders, colorAttachmentPixelFormat: .r32Float)
+
+        try! self.outlineShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "outlineVertex", fragmentName: "outlineFragment"))
+        self.outlinePipeline = RenderPipeline(device: device, program: self.outlineShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        
+        try! self.gridShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "gridVertex", fragmentName: "gridFragment"))
+        self.gridPipeline = RenderPipeline(device: device, program: self.gridShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        
+        try! self.uniformColorShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "uniformColorVertex", fragmentName: "uniformColorFragment"))
+        self.uniformColorPipeline = RenderPipeline(device: device, program: self.uniformColorShader, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        
+        try! self.canvasShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "canvasVertex", fragmentName: "canvasFragment"))
+        self.canvasPipeline = RenderPipeline(device: device, program: self.canvasShader, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        self.device = device
+        
+        let assetsURL = Bundle.main.bundleURL.appending(component: "Contents/Resources")
+        
+        assetURLs = Self.getAssetUrls(path: assetsURL.path)
+        
+        self.view = view
+        self.scene = scene
+        scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
+        self.assetManager = assetManager
+        self.editorView = matrix_lookAt(eye: editorCameraPosition, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
+        let size = view.bounds.size
+        let width = Int(size.width)
+        let height = Int(size.height)
+        let aspect = Float(width) / Float(height)
+        self.editorProjection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
+        
+        let textureLoader = MTKTextureLoader(device: device)
+        guard let url = Bundle.main.url(forResource: "spotlight", withExtension: "png") else {
+            fatalError("could not find spotlight texture")
+        }
+        do {
+            spotLightTexture = try textureLoader.newTexture(URL: url)
+        } catch {
+            fatalError("Failed to load texture: \(error)")
+        }
+        
+        let samplerDescriptor = MTLSamplerDescriptor()
+        samplerDescriptor.minFilter = .linear
+        samplerDescriptor.magFilter = .linear
+        samplerDescriptor.mipFilter = .linear
+        guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
+            fatalError("Failed to create sampler state")
+        }
+        self.sampler = sampler
+    }
+    
     func distance(p1: SIMD2<Float>, p2: SIMD2<Float>, x: SIMD2<Float>) -> Float {
         return abs((p2[1] - p1[1])*x[0] - (p2[0] - p1[0])*x[1] + p2[0]*p1[1] - p2[1]*p1[0])/sqrt((p1[1]-p2[1])*(p1[1]-p2[1]) + (p1[0]-p2[0])*(p1[0]-p2[0]))
     }
@@ -75,11 +145,9 @@ class Editor {
         let height = Float(size.height)
     
         let head_center_z: Float = (0.974306 + 1.268098) / 2;
-//        let head_geo_x: Float = 0.051304;
-//        let stem_geo_x: Float = 0.012320;
         
         let arrowBegin = SIMD3<Float>(0, 0, 0)
-        let arrowEnd = SIMD3<Float>(0, 0, 0.974306)
+        let arrowEnd = SIMD3<Float>(0, 0, 1.0)
         
         // mouse in pixel space
         let pMouse = SIMD2<Float>(mouseX, mouseY)
@@ -132,75 +200,199 @@ class Editor {
         if projBeg > arrowLength || projEnd > arrowLength{
             return min(distEnd, distBegin) < stemSelectThreshold
         }
-        
+
         // the shortest distance is on the vector perpendicular from the mouse to the line segment
         return distance(p1: pArrowBegin, p2: pArrowEnd, x: pMouse) < stemSelectThreshold
     }
+    
+    func NDCToScreenSpace(ndc: SIMD3<Float>) -> SIMD2<Float> {
+        let width = Float(view.drawableSize.width)
+        let height = Float(view.drawableSize.height)
+        let xPixel = (ndc.x + 1) * (width/2)
+        let yPixel = (ndc.y + 1) * (height/2)
+        return SIMD2(xPixel, yPixel)
+    }
+    
+    func SceenSpaceToNDC(pixel: SIMD2<Float>, depth: Float) -> SIMD3<Float> {
+        let width = Float(view.drawableSize.width)
+        let height = Float(view.drawableSize.height)
+        let x = (2.0 * pixel.x) / width - 1.0
+        let y = (2.0 * pixel.y) / height - 1.0
+        return SIMD3(x, y, depth)
+    }
+    
+    func ScreenSpaceToWorld(pixel: SIMD2<Float>, depth: Float) -> SIMD3<Float> {
+        let ndc = SceenSpaceToNDC(pixel: pixel, depth: depth)
+        var viewPos = editorProjection.inverse * SIMD4<Float>(ndc, 1.0)
+        viewPos /= viewPos.w
+        let worldPos = editorView.inverse * SIMD4<Float>(viewPos)
+        return worldPos[SIMD3(0, 1, 2)]
+    }
+    
+    // draw a light icon and a ring in screen space showing the radius
+    func drawLightIcon(encoder: MTLRenderCommandEncoder, position: SIMD3<Float>){
+        encoder.pushDebugGroup("Pointlight canvas")
+        let iconSize = 75
+        // project position into pixel space
+        let viewPos = editorView * SIMD4<Float>(position, 1.0)
+        let clipPos = editorProjection * viewPos
+        let ndc = clipPos / clipPos.w
+        // not visible so nothing to draw
+        if ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0 {
+            return
+        }
+        let pixelCoords = NDCToScreenSpace(ndc: ndc[SIMD3(0, 1, 2)])
+        
+        let tl = SIMD2(pixelCoords.x - Float(iconSize/2), pixelCoords.y - Float(iconSize/2))
+        let tr = SIMD2(pixelCoords.x + Float(iconSize/2), pixelCoords.y - Float(iconSize/2))
+        let br = SIMD2(pixelCoords.x + Float(iconSize/2), pixelCoords.y + Float(iconSize/2))
+        let bl = SIMD2(pixelCoords.x - Float(iconSize/2), pixelCoords.y + Float(iconSize/2))
+        
+        let uvs: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
+        
+        let tlWorld = ScreenSpaceToWorld(pixel: tl, depth: ndc.z)
+        let trWorld = ScreenSpaceToWorld(pixel: tr, depth: ndc.z)
+        let brWorld = ScreenSpaceToWorld(pixel: br, depth: ndc.z)
+        let blWorld = ScreenSpaceToWorld(pixel: bl, depth: ndc.z)
+        let v1: [Float] = [tlWorld.x, tlWorld.y, tlWorld.z, 1.0, 1.0, 1.0, uvs[0].x, uvs[0].y]
+        let v2: [Float] = [trWorld.x, trWorld.y, trWorld.z, 1.0, 1.0, 1.0, uvs[1].x, uvs[1].y]
+        let v3: [Float] = [brWorld.x, brWorld.y, brWorld.z, 1.0, 1.0, 1.0, uvs[2].x, uvs[2].y]
+        let v4: [Float] = [blWorld.x, blWorld.y, blWorld.z, 1.0, 1.0, 1.0, uvs[3].x, uvs[3].y]
+        
+        let vertices = v1 + v2 + v3 + v4
+        
+        encoder.setFragmentTexture(spotLightTexture, index: Bindings.baseTexture)
+        encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
+        
+        guard let vertexBuffer = device.makeBuffer(length: MemoryLayout<Float>.stride * vertices.count) else { fatalError() }
+        let vP = vertexBuffer.contents().bindMemory(to: Float.self, capacity: vertices.count)
+        vP.update(from: vertices, count: vertices.count)
+        
+        encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        
+        let indices: [UInt16] = [0, 1, 3, 3, 1, 2]
+        
+        guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * 6) else { fatalError()}
+        let iP = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: 6)
+        iP.update(from: indices, count: 6)
+        
+        encoder.drawIndexedPrimitives(type: .triangle, indexCount: indices.count, indexType: MTLIndexType.uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
+        encoder.popDebugGroup()
+    }
+    
+    func computeArrowHeadVertices(headLength: Float, radius: Float) -> (vertices: [SIMD3<Float>], indices: [UInt16]) {
+        let vertices: [SIMD3<Float>] = [
+            // Circle center
+            SIMD3(0, 0, 0),
+            //  Circle outline
+            SIMD3(radius, 0, 0),
+            SIMD3(radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), 0.0),
+            SIMD3(0, radius, 0),
+            SIMD3(-radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), 0.0),
+            SIMD3(-radius, 0, 0),
+            SIMD3(-radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), 0.0),
+            SIMD3(0, -radius, 0),
+            SIMD3(radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), 0.0),
+            // tip
+            SIMD3(0, 0, headLength),
+        ]
+        
+        let indices: [UInt16] = [
+            // Cone circle base (triangle fan around center 0)
+            0, 1, 2,  0, 2, 3,  0, 3, 4,  0, 4, 5,
+            0, 5, 6,  0, 6, 7,  0, 7, 8,  0, 8, 1,
 
-    func drawArrow(encoder: MTLRenderCommandEncoder, verts: [SIMD3<Float>], indices: [UInt16], transform: simd_float4x4, color: SIMD3<Float>) {
-        let selected = testArrowSelected(transform: transform)
-        let colorFactor: Float = selected ? 1.25 : 1.0
-        let scale: Float = selected ? 1.1 : 1.0
-        let transformWithScale = transform * matrix4x4_scale(scaleX: scale, scaleY: scale, scaleZ: scale)
+            // Sides (connect ring to tip 9)
+            1, 2, 9,  2, 3, 9,  3, 4, 9,  4, 5, 9,
+            5, 6, 9,  6, 7, 9,  7, 8, 9,  8, 1, 9
+        ]
+        return (vertices: vertices, indices: indices)
+    }
+    
+    func computeArrowStemVertices(start: SIMD3<Float>, end: SIMD3<Float>, transform: matrix_float4x4, selected: Bool) -> (vertices: [SIMD3<Float>], indices: [UInt16]){
+        let width = Float(view.drawableSize.width)
+        let height = Float(view.drawableSize.height)
+        
+        let thickness: Float = selected ? 3.0 : 2.5
+        
+        let startClip = editorProjection * editorView * transform * SIMD4<Float>(start, 1.0)
+        let endClip = editorProjection * editorView * transform * SIMD4<Float>(end, 1.0)
+        
+        let startNDC = SIMD3<Float>(startClip.x / startClip.w, startClip.y / startClip.w, startClip.z / startClip.w)
+        let endNDC = SIMD3<Float>(endClip.x / endClip.w, endClip.y / endClip.w, endClip.z / endClip.w)
+        
+        let startPixel = SIMD2<Float>((startNDC[0] + 1) * (width/2), (startNDC[1] + 1) * (height/2))
+        let endPixel = SIMD2<Float>((endNDC[0] + 1) * (width/2), (endNDC[1] + 1) * (height/2))
+        
+        // direction vector in pixel space
+        let dir = endPixel - startPixel;
+        // normal vector in pixel space is negative reciprocal
+        let normal = simd_normalize(SIMD2(-dir[1], dir[0]));
+        
+        // expand the line segment in pixel space using the normal to compute new points of a quad
+        let pEdge1 = startPixel + thickness * normal;
+        let pEdge2 = startPixel - thickness * normal;
+        let pEdge3 = endPixel + thickness * normal;
+        let pEdge4 = endPixel - thickness * normal;
+        
+        // convert new points back to NDC
+        let edge1NDC = SIMD4(2*(pEdge1[0]/width) - 1, 2*(pEdge1[1]/height) - 1, startNDC[2], 1.0);
+        let edge2NDC = SIMD4(2*(pEdge2[0]/width) - 1, 2*(pEdge2[1]/height) - 1, startNDC[2], 1.0);
+        let edge3NDC = SIMD4(2*(pEdge3[0]/width) - 1, 2*(pEdge3[1]/height) - 1, endNDC[2],   1.0);
+        let edge4NDC = SIMD4(2*(pEdge4[0]/width) - 1, 2*(pEdge4[1]/height) - 1, endNDC[2],   1.0);
+        
+        // project back to world
+        var edge1View = editorProjection.inverse * edge1NDC;
+        edge1View /= edge1View.w;
+        let edge1World = transform.inverse * editorView.inverse * edge1View;
+        
+        var edge2View = editorProjection.inverse * edge2NDC;
+        edge2View /= edge2View.w;
+        let edge2World = transform.inverse * editorView.inverse * edge2View;
+        
+        var edge3View = editorProjection.inverse * edge3NDC;
+        edge3View /= edge3View.w;
+        let edge3World = transform.inverse * editorView.inverse * edge3View;
+        
+        var edge4View = editorProjection.inverse * edge4NDC;
+        edge4View /= edge4View.w;
+        let edge4World = transform.inverse * editorView.inverse * edge4View;
+
+        let outVertices: [SIMD3<Float>] = [
+            edge1World[SIMD3<Int>(0,1,2)],
+            edge2World[SIMD3<Int>(0,1,2)],
+            edge3World[SIMD3<Int>(0,1,2)],
+            edge3World[SIMD3<Int>(0,1,2)],
+            edge2World[SIMD3<Int>(0,1,2)],
+            edge4World[SIMD3<Int>(0,1,2)]
+        ];
+
+        return (vertices: outVertices, indices: [0, 1, 2, 3, 4, 5])
+    }
+
+    func drawArrowGeometry(encoder: MTLRenderCommandEncoder, verts: [SIMD3<Float>], indices: [UInt16], transform: simd_float4x4, color: SIMD3<Float>, selected: Bool) {
+        encoder.pushDebugGroup("Draw arrow")
+        let colorFactor: Float = selected ? 10 : 1.0
+        let transformWithScale = transform
         guard verts.count > 0 else { return }
         guard let vbuf = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * verts.count, options: .storageModeShared) else { return }
         let vptr = vbuf.contents().bindMemory(to: SIMD3<Float>.self, capacity: verts.count)
         for i in 0..<verts.count { vptr[i] = verts[i] }
         encoder.setVertexBuffer(vbuf, offset: 0, index: Bindings.vertexBuffer)
-
+ 
         guard let ibuf = device.makeBuffer(length: MemoryLayout<matrix_float4x4>.stride, options: .storageModeShared) else { return }
         let iptr = ibuf.contents().bindMemory(to: matrix_float4x4.self, capacity: 1)
         iptr[0] = transformWithScale
         encoder.setVertexBuffer(ibuf, offset: 0, index: Bindings.instanceData)
         
-        guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * indices.count , options: .storageModeShared) else { return }
-        let iptr2 = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: indices.count)
-        for i in 0..<indices.count { iptr2[i] = indices[i] }
+        guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * indices.count, options: .storageModeShared) else { return }
+        let indexPtr = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: indices.count)
+        for i in 0..<indices.count { indexPtr[i] = indices[i] }
 
         var c = color * colorFactor
         encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD3<Float>>.stride, index: Bindings.pipelineUniforms)
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: indices.count, indexType: MTLIndexType.uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
-    }
-
-    init(device: MTLDevice, view: MTKView, scene: Scene, assetManager: AssetManager){
-        self.descriptor = MTLRenderPassDescriptor()
-        self.descriptor.colorAttachments[0].loadAction = .load
-        self.descriptor.colorAttachments[0].storeAction = .store
-        self.descriptor.depthAttachment.loadAction = .load
-        
-        self.hudRenderPassDescriptor = MTLRenderPassDescriptor()
-        hudRenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor.init(red: 0, green: 0, blue: 0, alpha: 1)
-        self.hudRenderPassDescriptor.colorAttachments[0].loadAction = .clear
-        self.hudRenderPassDescriptor.colorAttachments[0].storeAction = .store
-        
-        try! self.maskShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "maskVertex", fragmentName: "maskFragment"))
-        self.maskPipeline = RenderPipeline(device: device, program: self.maskShaders, colorAttachmentPixelFormat: .r32Float)
-
-        try! self.outlineShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "outlineVertex", fragmentName: "outlineFragment"))
-        self.outlinePipeline = RenderPipeline(device: device, program: self.outlineShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
-        
-        try! self.gridShaders = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "gridVertex", fragmentName: "gridFragment"))
-        self.gridPipeline = RenderPipeline(device: device, program: self.gridShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
-        
-        try! self.uniformColorShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "uniformColorVertex", fragmentName: "uniformColorFragment"))
-        self.uniformColorPipeline = RenderPipeline(device: device, program: self.uniformColorShader, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
-
-        self.device = device
-        
-        let assetsURL = Bundle.main.bundleURL.appending(component: "Contents/Resources")
-        
-        assetURLs = Self.getAssetUrls(path: assetsURL.path)
-        
-        self.view = view
-        self.scene = scene
-        scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
-        self.assetManager = assetManager
-        self.editorView = matrix_lookAt(eye: editorCameraPosition, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
-        let size = view.bounds.size
-        let width = Int(size.width)
-        let height = Int(size.height)
-        let aspect = Float(width) / Float(height)
-        self.editorProjection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
+        encoder.popDebugGroup()
     }
     
     static func getAssetUrls(path: String) -> [URL] {
@@ -215,7 +407,7 @@ class Editor {
 
             let assetURLs = try urls.filter { url in
                 let rv = try url.resourceValues(forKeys: [.isDirectoryKey])
-                return rv.isDirectory != true
+                return rv.isDirectory != true && url.pathExtension.lowercased() == "obj"
             }
             return assetURLs
         } catch {
@@ -242,9 +434,9 @@ class Editor {
             
             let instance = InstancedRenderable(device: device, model:model)
             instance.addInstance(transform: selected.transform.value)
-            
             instance.draw(renderEncoder: encoder, instanceId: nil)
         }
+        
         encoder.endEncoding()
     }
 
@@ -254,7 +446,7 @@ class Editor {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
             fatalError("Failed to create render command encoder")
         }
-        encoder.label = "mask outline encoder"
+        encoder.label = "ImGui UI render encoder"
         
         encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
         
@@ -286,20 +478,41 @@ class Editor {
         
         if let selected = selectedEntity {
             self.uniformColorPipeline.bind(encoder: encoder)
-
             let translation = selected.transform.value
-            
-            let vertices = Gizmo.verts
-            let indices = Gizmo.indices
-            
+                        
             let zTransform = translation * matrix_identity_float4x4
+            let zSelected = testArrowSelected(transform: zTransform)
+            let zStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: zTransform, selected: zSelected)
+            let zHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.05)
+            
             let xTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(90), axis: SIMD3(0, 1, 0))
+            let xSelected = testArrowSelected(transform: xTransform)
+            let xStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: xTransform, selected: xSelected)
+            let xHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.05)
+            
             let yTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(-90), axis: SIMD3(1, 0, 0))
-            let selected = testArrowSelected(transform: xTransform)
-            print(selected)
-            drawArrow(encoder: encoder, verts: vertices, indices: indices, transform: xTransform, color: SIMD3<Float>(0.5, 0, 0))
-            drawArrow(encoder: encoder, verts: vertices, indices: indices, transform: yTransform, color: SIMD3<Float>(0, 0.5, 0))
-            drawArrow(encoder: encoder, verts: vertices, indices: indices, transform: zTransform, color: SIMD3<Float>(0, 0, 0.5))
+            let ySelected = testArrowSelected(transform: yTransform)
+            let yStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: yTransform, selected: ySelected)
+            let yHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.065)
+            
+            drawArrowGeometry(encoder: encoder, verts: xStemVertices.vertices, indices: xStemVertices.indices, transform: xTransform, color: SIMD3<Float>(0.5, 0, 0), selected: xSelected)
+            let xHeadTransform = xTransform * matrix4x4_translation(0, 0, 1)
+            drawArrowGeometry(encoder: encoder, verts: xHeadVertices.vertices, indices: xHeadVertices.indices, transform: xHeadTransform, color: SIMD3<Float>(0.5, 0, 0), selected: xSelected)
+
+            drawArrowGeometry(encoder: encoder, verts: yStemVertices.vertices, indices: yStemVertices.indices, transform: yTransform, color: SIMD3<Float>(0, 0.5, 0), selected: ySelected)
+            let yHeadTransform = yTransform * matrix4x4_translation(0, 0, 1)
+            drawArrowGeometry(encoder: encoder, verts: yHeadVertices.vertices, indices: yHeadVertices.indices, transform: yHeadTransform, color: SIMD3<Float>(0, 0.5, 0), selected: ySelected)
+            
+            drawArrowGeometry(encoder: encoder, verts: zStemVertices.vertices, indices: zStemVertices.indices, transform: zTransform, color: SIMD3<Float>(0, 0, 0.1), selected: zSelected)
+            let zHeadTransform = zTransform * matrix4x4_translation(0, 0, 1)
+            drawArrowGeometry(encoder: encoder, verts: zHeadVertices.vertices, indices: zHeadVertices.indices, transform: zHeadTransform, color: SIMD3<Float>(0, 0, 0.1), selected: zSelected)
+        }
+        
+        canvasPipeline.bind(encoder: encoder)
+        let sceneLights = scene.getLights()
+
+        for light in sceneLights {
+            drawLightIcon(encoder: encoder, position: light.position[SIMD3(0, 1, 2)])
         }
 
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
@@ -309,7 +522,7 @@ class Editor {
     
     func imGui(view: MTKView, commandBuffer: MTLCommandBuffer, encoder: MTLRenderCommandEncoder){
         let io = ImGuiGetIO()!
-
+        
         io.pointee.DisplaySize.x = Float(view.bounds.size.width)
         io.pointee.DisplaySize.y = Float(view.bounds.size.height)
 
@@ -327,7 +540,7 @@ class Editor {
         
         var selectedIndex: Int32 = 0
 
-        if ImGuiBeginListBox("Fruits", ImVec2(x: 150, y: 100)) {
+        if ImGuiBeginListBox("Files", ImVec2(x: 150, y: 100)) {
             for i in 0..<self.assetURLs.count {
                 let item = self.assetURLs[i]
                 var isSelected: Bool = (Int32(i) == selectedIndex)
@@ -353,6 +566,7 @@ class Editor {
         ImGuiEnd()
         
         if(selectedEntity != nil) {
+            ImGuiSetNextWindowPos(ImVec2(x: 10, y: 150), 0, ImVec2(x: 0, y: 0))
             ImGuiBegin("Transform", &show_demo_window, 0)
             ImGuiSetWindowFontScale(0.3)
             ImGuiButton("translation", ImVec2(x: 30, y: 30))
@@ -363,10 +577,10 @@ class Editor {
             ImGuiEnd()
         }
 
-        ImGuiSetNextWindowPos(ImVec2(x: 150, y: 150), 1 << 1, ImVec2(x: 0, y: 0))
-        ImGuiSetNextWindowSize(ImVec2(x: 100, y: 100), 0)
+        ImGuiSetNextWindowPos(ImVec2(x: 0, y: 0), 1 << 1, ImVec2(x: 0, y: 0))
+        ImGuiSetNextWindowSize(ImVec2(x: 1000, y: 1000), 0)
         
-        ImGuiBegin("Scene area", &show_demo_window, 0 )
+        ImGuiBegin("Scene area", &show_demo_window, ImGuiWindowFlags(ImGuiWindowFlags_NoTitleBar.rawValue | ImGuiWindowFlags_NoBackground.rawValue | ImGuiWindowFlags_NoBringToFrontOnFocus.rawValue) )
         
         var size = ImVec2()
         ImGuiGetContentRegionAvail(&size)

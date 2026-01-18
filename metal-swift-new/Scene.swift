@@ -172,6 +172,24 @@ public class Scene: Codable {
         return nodes
     }
     
+    public func getLights() -> [PointLight] {
+        return getLights(from: rootNode)
+    }
+    
+    private func getLights(from node: Node) -> [PointLight] {
+        var lights: [PointLight] = []
+        if node.nodeType == .pointLight {
+            guard let lightData = node.lightData else {
+                fatalError()
+            }
+            lights.append(PointLight(position: node.transform.value.columns.3, color: SIMD4(lightData.color, 1.0), radius: lightData.radius))
+        }
+        for child in node.children {
+            lights.append(contentsOf: getLights(from: child))
+        }
+        return lights
+    }
+    
     func addLight(position: simd_float3, color: simd_float3, radius: simd_float1) {
         rootNode.children.append(Node(nodeType: .pointLight, transform: matrix4x4_translation(position.x, position.y, position.z), lightData: LightSceneData(color: color, radius: radius)))
     }

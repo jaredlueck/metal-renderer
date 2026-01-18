@@ -14,6 +14,7 @@ struct FrameUniforms {
     float4x4 inverseView;
     float4x4 inverseProjection;
     float4 cameraPosition;
+    float2 viewportSize;
 };
 
 struct Material {

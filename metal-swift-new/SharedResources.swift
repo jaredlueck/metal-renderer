@@ -143,7 +143,8 @@ final class SharedResources{
                       projection: projectionMatrix,
                       inverseView: viewMatrix.inverse,
                       inverseProjection: projectionMatrix.inverse,
-                      cameraPos: cameraPos)
+                      cameraPos: cameraPos,
+                      viewportSize: SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height)))
     }
 
 

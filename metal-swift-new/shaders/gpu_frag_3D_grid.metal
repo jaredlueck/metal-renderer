@@ -20,7 +20,6 @@ struct VSOut {
 
 vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]){
     float4 cameraPos = uniforms.cameraPosition;
-    // Construct a plane on y=0 extending +/-100 around the camera's x and z
     float camX = cameraPos.x;
     float camZ = cameraPos.z;
     const float extent = 100.0;

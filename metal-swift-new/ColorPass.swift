@@ -15,9 +15,6 @@ class ColorPass {
     let colorAttachmentPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
     let depthAttachmentPixelFormat = MTLPixelFormat.depth32Float
     
-    let skyboxShaders: ShaderProgram
-    let skyboxPipeline: RenderPipeline
-    
     let blinnPhongShaders: ShaderProgram
     let blinnPhongPipeline: RenderPipeline
     
@@ -25,17 +22,11 @@ class ColorPass {
     
     init(device: MTLDevice) {
         self.descriptor = MTLRenderPassDescriptor();
-//        self.descriptor.depthAttachment.texture = depthTexture
         self.descriptor.depthAttachment.storeAction = .store
         self.descriptor.depthAttachment.clearDepth = 1.0
         self.descriptor.colorAttachments[0].loadAction = .clear
-        
-//        self.descriptor.colorAttachments[0].texture = colorTexture
-        
+                
         self.device = device
-
-        self.skyboxShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "full_screen_triangle_vertex", fragmentName: "skyboxFragment"))
-        self.skyboxPipeline = RenderPipeline(device: self.device, program: self.skyboxShaders, vertexDescriptor: nil, colorAttachmentPixelFormat: colorAttachmentPixelFormat, depthAttachmentPixelFormat: depthAttachmentPixelFormat)
 
         self.blinnPhongShaders = try! ShaderProgram(device: self.device, descriptor: ShaderProgramDescriptor(vertexName: "phongVertex", fragmentName: "phongFragment"))
         self.blinnPhongPipeline = RenderPipeline(device: self.device, program: self.blinnPhongShaders, colorAttachmentPixelFormat: colorAttachmentPixelFormat, depthAttachmentPixelFormat: depthAttachmentPixelFormat)
@@ -78,19 +69,6 @@ class ColorPass {
         
         encoder.setFragmentSamplerState(sharedResources.sampler, index: Bindings.sampler)
         encoder.setFragmentSamplerState(sharedResources.shadowSampler, index: Bindings.shadowSampler)
-//        
-//        encoder.pushDebugGroup("Draw Skybox")
-//        
-//        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
-//        
-//        encoder.setFragmentTexture(sharedResources.skyBoxTexture, index: 0)
-//        encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
-//                
-//        self.skyboxPipeline.bind(encoder: encoder)
-//        
-//        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
-//        
-//        encoder.popDebugGroup()
                 
         encoder.pushDebugGroup("render meshes")
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)

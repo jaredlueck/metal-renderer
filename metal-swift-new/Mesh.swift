@@ -53,7 +53,6 @@ class Mesh {
         renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 1)
         renderEncoder.setFragmentTexture(texture, index: 0)
         renderEncoder.setFragmentSamplerState(sampler, index: 0)
-
     }
     
 }
