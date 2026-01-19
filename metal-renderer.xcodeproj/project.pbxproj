@@ -12,27 +12,27 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "metal-renderer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F5B445B2EE7DC94006C3F8B /* metal-rendererr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "metal-rendererr.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F628D662F08AD08001EEC60 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-swift-new" folder in "metal-renderer" target */ = {
+		0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-renderer" folder in "metal-rendererr" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"gen-bindings.py",
 			);
-			target = 0F5B445A2EE7DC94006C3F8B /* metal-renderer */;
+			target = 0F5B445A2EE7DC94006C3F8B /* metal-rendererr */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		0F5B445D2EE7DC94006C3F8B /* metal-swift-new */ = {
+		0F5B445D2EE7DC94006C3F8B /* metal-renderer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-swift-new" folder in "metal-renderer" target */,
+				0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-renderer" folder in "metal-rendererr" target */,
 			);
-			path = "metal-swift-new";
+			path = "metal-renderer";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -53,7 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				0F628D662F08AD08001EEC60 /* .gitignore */,
-				0F5B445D2EE7DC94006C3F8B /* metal-swift-new */,
+				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
 				0F5B445C2EE7DC94006C3F8B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,7 +61,7 @@
 		0F5B445C2EE7DC94006C3F8B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */,
+				0F5B445B2EE7DC94006C3F8B /* metal-rendererr.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -69,9 +69,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0F5B445A2EE7DC94006C3F8B /* metal-renderer */ = {
+		0F5B445A2EE7DC94006C3F8B /* metal-rendererr */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0F5B446E2EE7DC95006C3F8B /* Build configuration list for PBXNativeTarget "metal-renderer" */;
+			buildConfigurationList = 0F5B446E2EE7DC95006C3F8B /* Build configuration list for PBXNativeTarget "metal-rendererr" */;
 			buildPhases = (
 				0F5B44572EE7DC94006C3F8B /* Sources */,
 				0F5B44582EE7DC94006C3F8B /* Frameworks */,
@@ -82,14 +82,14 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				0F5B445D2EE7DC94006C3F8B /* metal-swift-new */,
+				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
 			);
-			name = "metal-renderer";
+			name = "metal-rendererr";
 			packageProductDependencies = (
 				0F5F268E2F0A03C400A07F1B /* ImGui */,
 			);
 			productName = "metal-swift-new";
-			productReference = 0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */;
+			productReference = 0F5B445B2EE7DC94006C3F8B /* metal-rendererr.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -126,7 +126,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0F5B445A2EE7DC94006C3F8B /* metal-renderer */,
+				0F5B445A2EE7DC94006C3F8B /* metal-rendererr */,
 			);
 		};
 /* End PBXProject section */
@@ -354,7 +354,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0F5B446E2EE7DC95006C3F8B /* Build configuration list for PBXNativeTarget "metal-renderer" */ = {
+		0F5B446E2EE7DC95006C3F8B /* Build configuration list for PBXNativeTarget "metal-rendererr" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0F5B446F2EE7DC95006C3F8B /* Debug */,

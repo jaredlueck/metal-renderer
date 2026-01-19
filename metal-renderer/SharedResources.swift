@@ -22,7 +22,6 @@ final class SharedResources{
     public var selectedRenderableInstance: Instance?
     public var colorBuffer: MTLTexture
     public var depthBuffer: MTLTexture
-    public var skyBoxTexture: MTLTexture
     public var depthStencilStateDisabled: MTLDepthStencilState
     public var depthStencilStateEnabled: MTLDepthStencilState
     public var sampler: MTLSamplerState
@@ -42,12 +41,6 @@ final class SharedResources{
     
         self.view = view
              let textureLoader = MTKTextureLoader(device: device)
-             
-             guard let url = Bundle.main.url(forResource: "vertical" , withExtension: "png") else {
-                 fatalError("Couldn't find skybox texture")
-             }
-             let skyboxTexture = try! textureLoader.newTexture(URL: url, options: [.cubeLayout: MTKTextureLoader.CubeLayout.vertical])
-             self.skyBoxTexture = skyboxTexture
              
              self.depthTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float,
                                                                  width: width,
