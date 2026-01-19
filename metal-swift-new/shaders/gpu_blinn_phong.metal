@@ -78,6 +78,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
                                  sampler shadowSampler [[sampler(1)]],
                                  constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]],
                                  constant PointLight* pointLights [[buffer(BindingsLightData)]],
+                                 constant uint& lightCount [[buffer(7)]],
                                  texturecube_array<float> shadowAtlas [[texture(BindingsShadowAtas)]],
                                  constant Material& material [[buffer(BindingsMaterialData)]]) {
     // Compute normalized view vector from surface to camera in world space
@@ -87,27 +88,29 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
     float3 ambient = 0.2 * material.baseColor.xyz;
     float3 diffuse = float3(0);
     float3 specular = float3(0);
+    
+    for(int i = 0 ; i < int(lightCount) ; i++){
+        PointLight light = pointLights[i];
         
-    PointLight light = pointLights[0];
-    
-    float3 lightPosView = (uniforms.view * float4(light.position.xyz, 1.0)).xyz;
-    float3 L = normalize(lightPosView - in.viewPos); // direction from fragment to light in view space
-    float3 H = normalize(L + V);
+        float3 lightPosView = (uniforms.view * float4(light.position.xyz, 1.0)).xyz;
+        float3 L = normalize(lightPosView - in.viewPos); // direction from fragment to light in view space
+        float3 H = normalize(L + V);
         
-    // distance from light to fragment
-    float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
-    float3 shadowDir = normalize(in.worldPos - light.position.xyz);
-
-    // Sample normalized distance from the cube array using the NON-compare shadow sampler
-    float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal,  0, 3);
-    
-    float3 lightColor = calculatePointLightColor(light, in.worldPos);
-    
-    float lightDiffuse = max(dot(N, L), 0.0);
-    float lightSpec = pow(max(dot(N, H), 0.0), 64);
-    
-    diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
-    specular +=  shadowFactor * lightSpec * lightColor;
+        // distance from light to fragment
+        float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
+        float3 shadowDir = normalize(in.worldPos - light.position.xyz);
+        
+        // Sample normalized distance from the cube array using the NON-compare shadow sampler
+        float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
+        
+        float3 lightColor = calculatePointLightColor(light, in.worldPos);
+        
+        float lightDiffuse = max(dot(N, L), 0.0);
+        float lightSpec = pow(max(dot(N, H), 0.0), 64);
+        
+        diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
+        specular +=  shadowFactor * lightSpec * lightColor;
+    }
 
     float3 result = ambient + diffuse + specular;
     return float4(result, 1.0);

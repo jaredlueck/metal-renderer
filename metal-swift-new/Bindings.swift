@@ -8,9 +8,12 @@
 enum Bindings {
     static let vertexBuffer = 0
     static let frameUniforms = 1
-    static let lightData = 2
     static let instanceData = 3
     static let materialData = 4
+    
+    static let lightData = 2
+    static let pointLightCount = 6
+    
     static let pipelineUniforms = 5
     
     static let sampler = 0

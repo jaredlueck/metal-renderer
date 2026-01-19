@@ -165,9 +165,7 @@ public class Scene: Codable {
     public func getNodes() -> [Node] {
         var nodes: [Node] = []
         for node in rootNode.children {
-            if node.nodeType == .model {
-                nodes.append(node)
-            }
+            nodes.append(node)
         }
         return nodes
     }

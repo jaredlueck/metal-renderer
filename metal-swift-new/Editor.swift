@@ -428,13 +428,15 @@ class Editor {
         }
         
         if let selected = selectedEntity {
-            self.maskPipeline.bind(encoder: encoder)
-                        
-            let model = assetManager.getAssetById(selected.assetId!)!
-            
-            let instance = InstancedRenderable(device: device, model:model)
-            instance.addInstance(transform: selected.transform.value)
-            instance.draw(renderEncoder: encoder, instanceId: nil)
+            if selected.nodeType == .model {
+                self.maskPipeline.bind(encoder: encoder)
+                
+                let model = assetManager.getAssetById(selected.assetId!)!
+                
+                let instance = InstancedRenderable(device: device, model:model)
+                instance.addInstance(transform: selected.transform.value)
+                instance.draw(renderEncoder: encoder, instanceId: nil)
+            }
         }
         
         encoder.endEncoding()
@@ -536,7 +538,7 @@ class Editor {
         ImGuiNewFrame()
         ImGuiSetNextWindowPos(ImVec2(x: 10, y: 10), 1 << 1, ImVec2(x: 0, y: 0))
         var show_demo_window = true
-        ImGuiBegin("Begin", &show_demo_window, 0)
+        ImGuiBegin("Meshes", &show_demo_window, 0)
         
         var selectedIndex: Int32 = 0
 
@@ -562,6 +564,18 @@ class Editor {
                 }
             }
             ImGuiEndListBox()
+            ImGuiTextV("Lights")
+            if ImGuiButton("Point light", ImVec2(x: 0, y: 0)) {
+               
+            }
+            if ImGuiBeginDragDropSource(0) {
+                ImGuiTextV("Pointlight")
+                var bytes: [UInt8] = Array("pointLight".utf8) + [0]
+                bytes.withUnsafeMutableBytes { raw in
+                    ImGuiSetDragDropPayload("LIGHT_SOURCE", raw.baseAddress, raw.count, 0)
+                }
+                ImGuiEndDragDropSource()
+            }
         }
         ImGuiEnd()
         
@@ -594,6 +608,16 @@ class Editor {
                 let filename = assetUrl.lastPathComponent
                 let assetId = self.assetManager.loadAssetAtPath(filename)
                 scene.add(Node(nodeType: .model, transform: matrix_identity_float4x4, assetId: assetId))
+            }
+            if let payload = ImGuiAcceptDragDropPayload("LIGHT_SOURCE", 0) {
+                let rawPtr = payload.pointee.Data
+                let size = Int(payload.pointee.DataSize)
+                
+                let buffer = UnsafeRawBufferPointer(start: rawPtr, count: size)
+                let trimmed = buffer.last == 0 ? buffer.dropLast() : buffer[...]
+                let type = String(decoding: trimmed, as: UTF8.self)
+
+                scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
             }
             ImGuiEndDragDropTarget()
         }
@@ -676,8 +700,14 @@ class Editor {
         let nodes = scene.getNodes()
         
         for node in nodes {
-            let asset = assetManager.getAssetById(node.assetId!)
-            let bb = asset!.asset.boundingBox
+            var bb: MDLAxisAlignedBoundingBox
+
+            if node.nodeType == .model {
+                let asset = assetManager.getAssetById(node.assetId!)
+                bb = asset!.asset.boundingBox
+            } else {
+                bb = MDLAxisAlignedBoundingBox(maxBounds: SIMD3<Float>(-0.5, -0.5, -0.5), minBounds: SIMD3<Float>(0.5, 0.5, 0.5))
+            }
             
             let transform = node.transform.value
             let lWorld = transform * SIMD4<Float>(bb.minBounds, 1.0)

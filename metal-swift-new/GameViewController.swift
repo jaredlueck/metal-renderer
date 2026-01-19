@@ -33,7 +33,7 @@ class GameViewController: NSViewController {
         self.view = mtkView
         let device = mtkView.device!
 
-        let url = URL(fileURLWithPath: "/Users/jaredlueck/Documents/programming/metal-swift-new/metal-swift-new/scene.json")
+        let url = Bundle.main.bundleURL.appending(component: "Contents/Resources").appending(component: "scene.json")
         let scene = try! JSONDecoder().decode(Scene.self, from: Data(contentsOf: url))
         let assetManager = AssetManager(device: device, assetFilePath: "assets.json")
         self.editor = Editor(device: device, view: self.mtkView, scene: scene, assetManager: assetManager)
