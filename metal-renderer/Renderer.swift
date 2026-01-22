@@ -104,13 +104,15 @@ class Renderer: NSObject, MTKViewDelegate {
             let instancedRenderable = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
             let shadowCastingInstances = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
             for instance in instances {
-                instancedRenderable.addInstance(transform: instance.transform)
+                instancedRenderable.addInstance(transform: instance.transform )
                 if instance.castsShadows{
                     shadowCastingInstances.addInstance(transform: instance.transform)
                 }
             }
             renderables.append(instancedRenderable)
-            shadowCasterInstances.append(shadowCastingInstances)
+            if shadowCastingInstances.instances.count > 0 {
+                shadowCasterInstances.append(shadowCastingInstances)
+            }
         }
 
         self.sharedResources.viewMatrix = outlinePass.editorView
@@ -118,8 +120,10 @@ class Renderer: NSObject, MTKViewDelegate {
         self.sharedResources.cameraPos = SIMD4<Float>(outlinePass.editorCameraPosition, 1.0)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
-
-        shadowPass.encode(commandBuffer: commandBuffer, lights: data.pointLights, cubeTextureArray: sharedResources.pointLightShadowAtlas, shadowCasters: shadowCasterInstances )
+        
+        if shadowCasterInstances.count > 0 {
+            shadowPass.encode(commandBuffer: commandBuffer, lights: data.pointLights, cubeTextureArray: sharedResources.pointLightShadowAtlas, shadowCasters: shadowCasterInstances )
+        }
         colorPass.encode(commandBuffer: commandBuffer, pointLights: data.pointLights, renderables: renderables  ,sharedResources: &sharedResources)
         outlinePass.renderHUD(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         outlinePass.renderUI(commandBuffer: commandBuffer, sharedResources: &sharedResources)

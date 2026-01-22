@@ -14,10 +14,11 @@ struct Material {
 
 class Instance {
     var id: String
-    var transform: simd_float4x4
+    var transform: Transform
+    var castsShadows: Bool = true
 //    var renderable: InstancedRenderable
     
-    init(id: String, transform: simd_float4x4, renderable: InstancedRenderable) {
+    init(id: String, transform: Transform, renderable: InstancedRenderable) {
         self.id = id
         self.transform = transform
 //        self.renderable = renderable
@@ -25,7 +26,6 @@ class Instance {
 }
 
 class InstancedRenderable {
-    public var castsShadows: Bool = true
     public var selectable = true
     let model: Model
     let sampler: MTLSamplerState
@@ -46,15 +46,15 @@ class InstancedRenderable {
         self.device = device
     }
 
-    func addInstance(transform: simd_float4x4) {
+    func addInstance(transform: Transform) {
         let id = UUID().uuidString
         instances.append(Instance(id: id, transform: transform, renderable: self))
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
         var transforms: [float4x4] = []
-        transforms = (instanceId.flatMap { id in instances.first(where: { $0.id == id }) }.map { [$0.transform] })
-            ?? instances.map { $0.transform }
+        transforms = (instanceId.flatMap { id in instances.first(where: { $0.id == id }) }.map { [$0.transform.getMatrix()] })
+        ?? instances.map { $0.transform.getMatrix() }
         
         let bufferlength = MemoryLayout<simd_float4x4>.stride * transforms.count
 

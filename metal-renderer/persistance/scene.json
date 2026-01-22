@@ -1,1 +1,1 @@
-{"rootNode":{"nodeType":-1,"transform":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],"id":"27880595-53C3-4193-B1FD-1CE892919591","children":[{"nodeType":0,"id":"52856EA1-B597-478B-BFC2-C4D54C360219","transform":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,1,-4,1]],"assetId": "sphere", "children":[]}]}}
+{"rootNode":{"nodeType":-1,"transform":{"position":[0, 0, 0], "scale":[1, 1, 1]},"id":"27880595-53C3-4193-B1FD-1CE892919591","children":[{"nodeType":0,"id":"52856EA1-B597-478B-BFC2-C4D54C360219","transform":{"position":[0, 0, 0], "scale": [1, 1, 1]},"assetId": "sphere", "children":[]}]}}

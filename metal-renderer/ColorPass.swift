@@ -78,6 +78,16 @@ class ColorPass {
         }
         
         encoder.setFragmentBuffer(lightBuffer, offset: 0, index: Bindings.lightData)
+        
+        var lightCount = pointLights.count
+        encoder.setFragmentBytes(&lightCount, length: MemoryLayout<UInt>.self.stride, index: Bindings.pointLightCount)
+        
+        self.blinnPhongPipeline.bind(encoder: encoder)
+        
+        for i in 0..<renderables.count {
+            let renderable = renderables[i]
+        }
+        encoder.setFragmentBuffer(lightBuffer, offset: 0, index: Bindings.lightData)
         encoder.setFragmentTexture(sharedResources.pointLightShadowAtlas, index: Bindings.shadowAtas)
 
         self.blinnPhongPipeline.bind(encoder: encoder)

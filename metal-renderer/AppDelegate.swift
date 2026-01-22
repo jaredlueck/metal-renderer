@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.center()
-        window.title = "metal-swift-new"
+        window.title = "metal-renderer"
         let viewController = GameViewController()
         window.contentViewController = viewController
         window.makeKeyAndOrderFront(nil)

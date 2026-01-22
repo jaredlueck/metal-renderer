@@ -14,6 +14,7 @@ class GameViewController: NSViewController {
     var mtkView: MTKView!
     var dragging = true
     var editor: Editor!
+
     override var acceptsFirstResponder: Bool { true }
     
     override func viewDidLoad() {
@@ -33,8 +34,20 @@ class GameViewController: NSViewController {
         self.view = mtkView
         let device = mtkView.device!
 
-        let url = Bundle.main.bundleURL.appending(component: "Contents/Resources").appending(component: "scene.json")
-        let scene = try! JSONDecoder().decode(Scene.self, from: Data(contentsOf: url))
+        let url = Bundle.main.bundleURL
+            .appending(component: "Contents/Resources")
+            .appending(component: "scene.json")
+
+        var scene: Scene
+
+        do {
+            let data = try Data(contentsOf: url)
+            scene = try JSONDecoder().decode(Scene.self, from: data)
+        } catch {
+            print("Failed to load or decode scene.json: \(error). Falling back to empty Scene().")
+            scene = Scene()
+        }
+
         let assetManager = AssetManager(device: device, assetFilePath: "assets.json")
         self.editor = Editor(device: device, view: self.mtkView, scene: scene, assetManager: assetManager)
         
@@ -100,10 +113,8 @@ class GameViewController: NSViewController {
         let pixelPoint = CGPoint(x: event.deltaX * scale, y: event.deltaY * scale)
         let dx = Float(pixelPoint.x)
         let dy = -Float(pixelPoint.y)
-        if(editor.selectedEntity != nil){
-            editor.updateSelectedObjectTransform(deltaX: dx, deltaY: dy)
-        }
         ImGui_ImplOSX_HandleEvent(event, view)
+        editor.mouseDragged(dx: dx, dy: dy)
     }
     
     override func scrollWheel(with event: NSEvent) {
@@ -122,3 +133,4 @@ class GameViewController: NSViewController {
         print("Keydown: \(event.keyCode)")
     }
 }
+

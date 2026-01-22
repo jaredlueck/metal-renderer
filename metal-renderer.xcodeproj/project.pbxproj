@@ -20,7 +20,7 @@
 		0F3A83732F13F5AF00FEB3A8 /* Exceptions for "metal-renderer" folder in "metal-rendererr" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"gen-bindings.py",
+				"scripts/gen-bindings.py",
 			);
 			target = 0F5B445A2EE7DC94006C3F8B /* metal-rendererr */;
 		};

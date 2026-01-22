@@ -78,7 +78,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
                                  sampler shadowSampler [[sampler(1)]],
                                  constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]],
                                  constant PointLight* pointLights [[buffer(BindingsLightData)]],
-                                 constant uint& lightCount [[buffer(7)]],
+                                 constant uint& lightCount [[buffer(BindingsPointLightCount)]],
                                  texturecube_array<float> shadowAtlas [[texture(BindingsShadowAtas)]],
                                  constant Material& material [[buffer(BindingsMaterialData)]]) {
     // Compute normalized view vector from surface to camera in world space

@@ -1,5 +1,5 @@
 //
-//  OutlineRenderPass.swift
+//  Editor.swift
 //  metal-swift-new
 //
 //  Created by Jared Lueck on 2026-01-01.
@@ -10,19 +10,15 @@ import simd
 import ImGui
 import MetalKit
 
-class AxisGizmo {
-    var xbb: MDLAxisAlignedBoundingBox
-    var xhovered = false
-    var ybb: MDLAxisAlignedBoundingBox
-    var yHovered = false
-    var zbb: MDLAxisAlignedBoundingBox
-    var zHovere = false
-    
-    init(xVerts: [SIMD3<Float>], yVerts: [SIMD3<Float>], zVerts: [SIMD3<Float>]){
-        self.xbb = Editor.computeBoundingBox(vertices: xVerts)
-        self.ybb = Editor.computeBoundingBox(vertices: yVerts)
-        self.zbb = Editor.computeBoundingBox(vertices: zVerts)
-    }
+enum TransformMode {
+    case translate
+    case scale
+    case rotate
+}
+
+struct ArrowGizmo{
+    var selected: Bool = false
+    var direction: SIMD3<Float>
 }
 
 class Editor {
@@ -57,7 +53,7 @@ class Editor {
     var editorCameraPosition = SIMD3<Float>(0.0, 4.0, 5)
     
     var selectedEntity: Node? = nil
-    var axisGizmo: AxisGizmo? = nil
+    var transformMode: TransformMode = .translate
     
     var mouseX: Float = 0.0
     var mouseY: Float = 0.0
@@ -68,12 +64,19 @@ class Editor {
     
     let sampler: MTLSamplerState
     
+    var hoveringSceneWindow = false
+    
+    var xAxisSelected = false
+    var yAxisSelected = false
+    var zAxisSelected = false
+    
+    var dragging = false
+    
     init(device: MTLDevice, view: MTKView, scene: Scene, assetManager: AssetManager){
         self.descriptor = MTLRenderPassDescriptor()
         self.descriptor.colorAttachments[0].loadAction = .load
         self.descriptor.colorAttachments[0].storeAction = .store
         self.descriptor.depthAttachment.loadAction = .load
-        
         
         self.hudRenderPassDescriptor = MTLRenderPassDescriptor()
         self.hudRenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor.init(red: 0, green: 0, blue: 0, alpha: 1)
@@ -280,21 +283,21 @@ class Editor {
         encoder.popDebugGroup()
     }
     
-    func computeArrowHeadVertices(headLength: Float, radius: Float) -> (vertices: [SIMD3<Float>], indices: [UInt16]) {
+    func computeArrowHeadVertices(shaftLength: Float, headLength: Float, radius: Float) -> (vertices: [SIMD3<Float>], indices: [UInt16]) {
         let vertices: [SIMD3<Float>] = [
             // Circle center
-            SIMD3(0, 0, 0),
+            SIMD3<Float>(0, 0, shaftLength),
             //  Circle outline
-            SIMD3(radius, 0, 0),
-            SIMD3(radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), 0.0),
-            SIMD3(0, radius, 0),
-            SIMD3(-radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), 0.0),
-            SIMD3(-radius, 0, 0),
-            SIMD3(-radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), 0.0),
-            SIMD3(0, -radius, 0),
-            SIMD3(radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), 0.0),
+            SIMD3<Float>(radius, 0, shaftLength),
+            SIMD3<Float>(radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), shaftLength),
+            SIMD3<Float>(0, radius, shaftLength),
+            SIMD3<Float>(-radius * cos(radians_from_degrees(45)), radius * sin(radians_from_degrees(45)), shaftLength),
+            SIMD3<Float>(-radius, 0, shaftLength),
+            SIMD3<Float>(-radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), shaftLength),
+            SIMD3<Float>(0, -radius, shaftLength),
+            SIMD3<Float>(radius * cos(radians_from_degrees(45)), -radius * sin(radians_from_degrees(45)), shaftLength),
             // tip
-            SIMD3(0, 0, headLength),
+            SIMD3<Float>(0, 0, headLength + shaftLength),
         ]
         
         let indices: [UInt16] = [
@@ -309,7 +312,50 @@ class Editor {
         return (vertices: vertices, indices: indices)
     }
     
-    func computeArrowStemVertices(start: SIMD3<Float>, end: SIMD3<Float>, transform: matrix_float4x4, selected: Bool) -> (vertices: [SIMD3<Float>], indices: [UInt16]){
+    func computeArrowHeadVerticesCube(shaftLength: Float, headLength: Float) -> (vertices: [SIMD3<Float>], indices: [UInt16]) {
+        let halfW: Float = headLength * 0.5
+        let halfH: Float = headLength * 0.5
+
+        let z0: Float = shaftLength
+        let z1: Float = shaftLength + headLength
+
+        let p000 = SIMD3<Float>(-halfW, -halfH, z0) // x-, y-, z0
+        let p100 = SIMD3<Float>( halfW, -halfH, z0) // x+, y-, z0
+        let p110 = SIMD3<Float>( halfW,  halfH, z0) // x+, y+, z0
+        let p010 = SIMD3<Float>(-halfW,  halfH, z0) // x-, y+, z0
+
+        let p001 = SIMD3<Float>(-halfW, -halfH, z1) // x-, y-, z1
+        let p101 = SIMD3<Float>( halfW, -halfH, z1) // x+, y-, z1
+        let p111 = SIMD3<Float>( halfW,  halfH, z1) // x+, y+, z1
+        let p011 = SIMD3<Float>(-halfW,  halfH, z1) // x-, y+, z1
+
+        let vertices: [SIMD3<Float>] = [
+            p001, p101, p111, p011,
+            p000, p010, p110, p100,
+            p101, p100, p110, p111,
+            p001, p011, p010, p000,
+            p011, p111, p110, p010,
+            p001, p000, p100, p101
+        ]
+
+        // 36 indices (two triangles per face)
+        // Winding order assumes a typical right-handed system; flip each triangle if your culling looks inverted.
+        let indices: [UInt16] = [
+            0, 1, 2,  0, 2, 3,
+            4, 5, 6,  4, 6, 7,
+            8, 9,10,  8,10,11,
+            12,13,14, 12,14,15,
+            16,17,18, 16,18,19,
+            20,21,22, 20,22,23
+        ]
+        return (vertices: vertices, indices: indices)
+    }
+
+    
+    func computeArrowStemVertices(transform: matrix_float4x4, selected: Bool) -> (vertices: [SIMD3<Float>], indices: [UInt16]){
+        let start = SIMD3<Float>(0.0, 0.0, 0.0)
+        let end = SIMD3<Float>(0.0, 0.0, 1.0)
+        
         let width = Float(view.drawableSize.width)
         let height = Float(view.drawableSize.height)
         
@@ -370,26 +416,38 @@ class Editor {
         return (vertices: outVertices, indices: [0, 1, 2, 3, 4, 5])
     }
 
-    func drawArrowGeometry(encoder: MTLRenderCommandEncoder, verts: [SIMD3<Float>], indices: [UInt16], transform: simd_float4x4, color: SIMD3<Float>, selected: Bool) {
-        encoder.pushDebugGroup("Draw arrow")
+    func drawArrowGizmo(encoder: MTLRenderCommandEncoder, transform: simd_float4x4, color: SIMD3<Float>, selected: Bool) {
+        encoder.pushDebugGroup("arrow gizmo")
+        let radius: Float = 0.065
+        let headLength: Float = 0.2
+        let shaftLength: Float = 1.0
+        let selected = testArrowSelected(transform: transform)
+        let stemVertices = computeArrowStemVertices(transform: transform, selected: selected)
+        let headVertices = transformMode == .translate ? computeArrowHeadVertices(shaftLength: shaftLength, headLength: headLength, radius: radius) : computeArrowHeadVerticesCube(shaftLength: shaftLength, headLength: headLength)
+                
+        drawArrowGeometry(encoder: encoder, verts: stemVertices.vertices, indices: stemVertices.indices, transform: transform, color: color, selected: selected)
+        drawArrowGeometry(encoder: encoder, verts: headVertices.vertices, indices: headVertices.indices, transform: transform, color: color, selected: selected)
+        encoder.popDebugGroup()
+    }
+    
+    func drawArrowGeometry(encoder: MTLRenderCommandEncoder, verts: [SIMD3<Float>], indices: [UInt16], transform: simd_float4x4, color: SIMD3<Float>, selected: Bool){
         let colorFactor: Float = selected ? 10 : 1.0
-        let transformWithScale = transform
-        guard verts.count > 0 else { return }
+        var c = color * colorFactor
+        
         guard let vbuf = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * verts.count, options: .storageModeShared) else { return }
         let vptr = vbuf.contents().bindMemory(to: SIMD3<Float>.self, capacity: verts.count)
         for i in 0..<verts.count { vptr[i] = verts[i] }
         encoder.setVertexBuffer(vbuf, offset: 0, index: Bindings.vertexBuffer)
  
-        guard let ibuf = device.makeBuffer(length: MemoryLayout<matrix_float4x4>.stride, options: .storageModeShared) else { return }
-        let iptr = ibuf.contents().bindMemory(to: matrix_float4x4.self, capacity: 1)
-        iptr[0] = transformWithScale
-        encoder.setVertexBuffer(ibuf, offset: 0, index: Bindings.instanceData)
+        guard let instanceBuffer = device.makeBuffer(length: MemoryLayout<matrix_float4x4>.stride, options: .storageModeShared) else { return }
+        let iptr = instanceBuffer.contents().bindMemory(to: matrix_float4x4.self, capacity: 1)
+        iptr[0] = transform
+        encoder.setVertexBuffer(instanceBuffer, offset: 0, index: Bindings.instanceData)
         
         guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * indices.count, options: .storageModeShared) else { return }
         let indexPtr = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: indices.count)
         for i in 0..<indices.count { indexPtr[i] = indices[i] }
 
-        var c = color * colorFactor
         encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD3<Float>>.stride, index: Bindings.pipelineUniforms)
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: indices.count, indexType: MTLIndexType.uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
         encoder.popDebugGroup()
@@ -434,7 +492,7 @@ class Editor {
                 let model = assetManager.getAssetById(selected.assetId!)!
                 
                 let instance = InstancedRenderable(device: device, model:model)
-                instance.addInstance(transform: selected.transform.value)
+                instance.addInstance(transform: selected.transform)
                 instance.draw(renderEncoder: encoder, instanceId: nil)
             }
         }
@@ -480,34 +538,56 @@ class Editor {
         
         if let selected = selectedEntity {
             self.uniformColorPipeline.bind(encoder: encoder)
-            let translation = selected.transform.value
-                        
-            let zTransform = translation * matrix_identity_float4x4
-            let zSelected = testArrowSelected(transform: zTransform)
-            let zStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: zTransform, selected: zSelected)
-            let zHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.05)
-            
-            let xTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(90), axis: SIMD3(0, 1, 0))
-            let xSelected = testArrowSelected(transform: xTransform)
-            let xStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: xTransform, selected: xSelected)
-            let xHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.05)
-            
-            let yTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(-90), axis: SIMD3(1, 0, 0))
-            let ySelected = testArrowSelected(transform: yTransform)
-            let yStemVertices = computeArrowStemVertices(start: SIMD3<Float>(0.0, 0.0, 0.0), end: SIMD3<Float>(0.0, 0.0, 1.0), transform: yTransform, selected: ySelected)
-            let yHeadVertices = computeArrowHeadVertices(headLength: 0.2, radius: 0.065)
-            
-            drawArrowGeometry(encoder: encoder, verts: xStemVertices.vertices, indices: xStemVertices.indices, transform: xTransform, color: SIMD3<Float>(0.5, 0, 0), selected: xSelected)
-            let xHeadTransform = xTransform * matrix4x4_translation(0, 0, 1)
-            drawArrowGeometry(encoder: encoder, verts: xHeadVertices.vertices, indices: xHeadVertices.indices, transform: xHeadTransform, color: SIMD3<Float>(0.5, 0, 0), selected: xSelected)
+            let position = selected.transform.position
+            let translation = matrix4x4_translation(position.x, position.y, position.z)
 
-            drawArrowGeometry(encoder: encoder, verts: yStemVertices.vertices, indices: yStemVertices.indices, transform: yTransform, color: SIMD3<Float>(0, 0.5, 0), selected: ySelected)
-            let yHeadTransform = yTransform * matrix4x4_translation(0, 0, 1)
-            drawArrowGeometry(encoder: encoder, verts: yHeadVertices.vertices, indices: yHeadVertices.indices, transform: yHeadTransform, color: SIMD3<Float>(0, 0.5, 0), selected: ySelected)
-            
-            drawArrowGeometry(encoder: encoder, verts: zStemVertices.vertices, indices: zStemVertices.indices, transform: zTransform, color: SIMD3<Float>(0, 0, 0.1), selected: zSelected)
-            let zHeadTransform = zTransform * matrix4x4_translation(0, 0, 1)
-            drawArrowGeometry(encoder: encoder, verts: zHeadVertices.vertices, indices: zHeadVertices.indices, transform: zHeadTransform, color: SIMD3<Float>(0, 0, 0.1), selected: zSelected)
+            // Build transforms for each axis
+            let zTransform = translation * matrix_identity_float4x4
+            let xTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(90), axis: SIMD3(0, 1, 0))
+            let yTransform = translation * matrix4x4_rotation(radians: radians_from_degrees(-90), axis: SIMD3(1, 0, 0))
+
+            // Determine hover state for each axis this frame
+            let zHovered = testArrowSelected(transform: zTransform)
+            let xHovered = testArrowSelected(transform: xTransform)
+            let yHovered = testArrowSelected(transform: yTransform)
+
+            // When dragging, lock to whichever axis was already active and ignore hover changes
+            if dragging {
+                if xAxisSelected {
+                    yAxisSelected = false
+                    zAxisSelected = false
+                } else if yAxisSelected {
+                    xAxisSelected = false
+                    zAxisSelected = false
+                } else if zAxisSelected {
+                    xAxisSelected = false
+                    yAxisSelected = false
+                }
+            } else {
+                if xHovered {
+                    xAxisSelected = true
+                    yAxisSelected = false
+                    zAxisSelected = false
+                } else if yHovered {
+                    xAxisSelected = false
+                    yAxisSelected = true
+                    zAxisSelected = false
+                } else if zHovered {
+                    xAxisSelected = false
+                    yAxisSelected = false
+                    zAxisSelected = true
+                } else {
+                    // Nothing hovered
+                    xAxisSelected = false
+                    yAxisSelected = false
+                    zAxisSelected = false
+                }
+            }
+
+            // Draw gizmos using the final mutually exclusive selection state
+            drawArrowGizmo(encoder: encoder, transform: zTransform, color: SIMD3<Float>(0.0, 0.0, 0.5), selected: zAxisSelected)
+            drawArrowGizmo(encoder: encoder, transform: xTransform, color: SIMD3<Float>(0.5, 0.0, 0.0), selected: xAxisSelected)
+            drawArrowGizmo(encoder: encoder, transform: yTransform, color: SIMD3<Float>(0.0, 0.5, 0.0), selected: yAxisSelected)
         }
         
         canvasPipeline.bind(encoder: encoder)
@@ -524,6 +604,9 @@ class Editor {
     
     func imGui(view: MTKView, commandBuffer: MTLCommandBuffer, encoder: MTLRenderCommandEncoder){
         let io = ImGuiGetIO()!
+        io.pointee.IniFilename = nil
+        let viewWidth = Float(view.bounds.size.width)
+        let viewHeight = Float(view.bounds.size.height)
         
         io.pointee.DisplaySize.x = Float(view.bounds.size.width)
         io.pointee.DisplaySize.y = Float(view.bounds.size.height)
@@ -542,7 +625,7 @@ class Editor {
         
         var selectedIndex: Int32 = 0
 
-        if ImGuiBeginListBox("Files", ImVec2(x: 150, y: 100)) {
+        if ImGuiBeginListBox("files", ImVec2(x: 150, y: 100)) {
             for i in 0..<self.assetURLs.count {
                 let item = self.assetURLs[i]
                 var isSelected: Bool = (Int32(i) == selectedIndex)
@@ -579,26 +662,51 @@ class Editor {
         }
         ImGuiEnd()
         
-        if(selectedEntity != nil) {
-            ImGuiSetNextWindowPos(ImVec2(x: 10, y: 150), 0, ImVec2(x: 0, y: 0))
-            ImGuiBegin("Transform", &show_demo_window, 0)
-            ImGuiSetWindowFontScale(0.3)
-            ImGuiButton("translation", ImVec2(x: 30, y: 30))
-            let flags = Int32(ImGuiButtonFlags_PressedOnClick.rawValue)
-            ImGuiButtonEx("translation", ImVec2(x: 30, y: 30), flags)
-            ImGuiButton("scale", ImVec2(x: 30, y: 30))
+        if let selectedEntity = selectedEntity {
+            ImGuiSetNextWindowPos(ImVec2(x: 10, y: 200), 0, ImVec2(x: 0, y: 0))
+            ImGuiBegin("Object Details", &show_demo_window, 0)
+//            ImGuiSetWindowFontScale(0.3)
+            if ImGuiButtonEx("translation", ImVec2(x: 30, y: 30), 0) {
+                transformMode = .translate
+            }
+            if ImGuiButton("scale", ImVec2(x: 30, y: 30)) {
+                transformMode = .scale
+            }
             ImGuiButton("rotation", ImVec2(x: 30, y: 30))
+            withUnsafeMutablePointer(to: &selectedEntity.castShadows) { ptr in
+                if ImGuiCheckbox("casts shadows", ptr) {
+                    print("selected")
+                }
+            }
             ImGuiEnd()
         }
+        
+        ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), 1 << 1, ImVec2(x: 1, y: 0))
+        ImGuiBegin("Scene Hierarchy", &show_demo_window, 0)
+        if ImGuiButton("Save", ImVec2(x: 50, y: 50)) {
+            print("save")
+        }
+        ImGuiEnd()
 
         ImGuiSetNextWindowPos(ImVec2(x: 0, y: 0), 1 << 1, ImVec2(x: 0, y: 0))
-        ImGuiSetNextWindowSize(ImVec2(x: 1000, y: 1000), 0)
+        ImGuiSetNextWindowSize(ImVec2(x: viewWidth, y: viewHeight), 0)
         
-        ImGuiBegin("Scene area", &show_demo_window, ImGuiWindowFlags(ImGuiWindowFlags_NoTitleBar.rawValue | ImGuiWindowFlags_NoBackground.rawValue | ImGuiWindowFlags_NoBringToFrontOnFocus.rawValue) )
+        let sceneFlags = ImGuiWindowFlags(
+            ImGuiWindowFlags_NoTitleBar.rawValue |
+            ImGuiWindowFlags_NoBackground.rawValue |
+            ImGuiWindowFlags_NoBringToFrontOnFocus.rawValue |
+            ImGuiWindowFlags_NoNavFocus.rawValue |
+            ImGuiWindowFlags_NoMove.rawValue |
+            ImGuiWindowFlags_NoResize.rawValue
+        )
+        
+        ImGuiBegin("Scene area", &show_demo_window,sceneFlags )
         
         var size = ImVec2()
         ImGuiGetContentRegionAvail(&size)
         ImGuiInvisibleButton("SceneDropZone", size, 0);
+        
+        hoveringSceneWindow = ImGuiIsItemHovered(0)
 
         if ImGuiBeginDragDropTarget() {
             if let payload = ImGuiAcceptDragDropPayload("LIST_ITEM_INDEX", 0) {
@@ -607,7 +715,7 @@ class Editor {
                 let assetUrl = self.assetURLs[Int(index)]
                 let filename = assetUrl.lastPathComponent
                 let assetId = self.assetManager.loadAssetAtPath(filename)
-                scene.add(Node(nodeType: .model, transform: matrix_identity_float4x4, assetId: assetId))
+                scene.add(Node(nodeType: .model, transform: Transform(), assetId: assetId))
             }
             if let payload = ImGuiAcceptDragDropPayload("LIGHT_SOURCE", 0) {
                 let rawPtr = payload.pointee.Data
@@ -684,6 +792,15 @@ class Editor {
     // Cast a ray from the camera mouse click position into the screen and calculate
     // if it intersects with any objects in the scene.
     func AABBintersect(px: Float, py: Float){
+        let io = ImGuiGetIO()!
+        let wantsCaptureMouse = io.pointee.WantCaptureMouse
+        if wantsCaptureMouse && !hoveringSceneWindow {
+            return
+        }
+        if dragging {
+            dragging = false
+            return
+        }
         let size = view.drawableSize
         let width = Float(size.width)
         let height = Float(size.height)
@@ -709,7 +826,7 @@ class Editor {
                 bb = MDLAxisAlignedBoundingBox(maxBounds: SIMD3<Float>(-0.5, -0.5, -0.5), minBounds: SIMD3<Float>(0.5, 0.5, 0.5))
             }
             
-            let transform = node.transform.value
+            let transform = node.transform.getMatrix()
             let lWorld = transform * SIMD4<Float>(bb.minBounds, 1.0)
             let rWorld = transform * SIMD4<Float>(bb.maxBounds, 1.0)
             
@@ -777,8 +894,13 @@ class Editor {
         self.editorCameraPosition = pos[SIMD3<Int>(0, 1, 2)]
     }
     
+    
     func updateSelectedObjectTransform(deltaX: Float, deltaY: Float){
         // update the object position in the xy plane relative to the camera
+        let screenDirection = SIMD4<Float>(deltaX, deltaY, 0.0, 0.0)
+        var viewDirection = editorProjection.inverse * screenDirection
+        viewDirection /= viewDirection.w
+        
         let size = view.drawableSize
         let width = Float(size.width)
         let height = Float(size.height)
@@ -795,21 +917,47 @@ class Editor {
         let selectedObj = self.selectedEntity!
         
         // get object depth in clip space
-        let objPositionWorld = selectedObj.transform.value.columns.3
+        let objPositionWorld = SIMD4(selectedObj.transform.position, 1.0)
         let objClip = projection * view * objPositionWorld
         let wClip = objClip.w
         // add NDC offsets scaled by w
         let objOffset = SIMD4<Float>(objClip.x + dxNDC * wClip, objClip.y + dyNDC * wClip, objClip.z, wClip)
-        
+
         // project back to world space and calculate difference in position
         let objWorldOffset = inverseView * inverseProjection * objOffset
-        
+
         let diff = objWorldOffset - objPositionWorld
-        
+        var proj = SIMD3<Float>(0.0, 0.0, 0.0)
+
+        if xAxisSelected {
+            proj.x = diff.x
+        }
+        else if yAxisSelected {
+            proj.y = diff.y
+        }
+        else if zAxisSelected {
+            proj.z = diff.z
+        }
+        var translation = matrix_identity_float4x4
+        var scale = matrix_identity_float4x4
         // update the transform with translation
-        let transform = matrix4x4_translation(diff.x, diff.y, diff.z)
-        let newTransform = transform * selectedObj.transform.value
-        selectedObj.transform.value = newTransform
+        if transformMode == .translate {
+            selectedObj.transform.position = selectedObj.transform.position + proj
+        } else {
+            selectedObj.transform.scale = selectedObj.transform.scale + proj
+        }
+    }
+    
+    func mouseDragged(dx: Float, dy: Float){
+        let io = ImGuiGetIO()!
+        dragging = true
+        let wantsCaptureMouse = io.pointee.WantCaptureMouse
+        if wantsCaptureMouse && !hoveringSceneWindow {
+            return
+        }
+        if(selectedEntity != nil){
+            updateSelectedObjectTransform(deltaX: dx, deltaY: dy)
+        }
     }
 }
 

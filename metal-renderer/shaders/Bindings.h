@@ -5,9 +5,10 @@
 typedef enum Bindings : unsigned int {
     BindingsVertexBuffer = 0,
     BindingsFrameUniforms = 1,
-    BindingsLightData = 2,
     BindingsInstanceData = 3,
     BindingsMaterialData = 4,
+    BindingsLightData = 2,
+    BindingsPointLightCount = 6,
     BindingsPipelineUniforms = 5,
     BindingsSampler = 0,
     BindingsShadowSampler = 1,
