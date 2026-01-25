@@ -30,10 +30,10 @@ vertex VertexOut cubeShadowMapVertex(uint vertex_id [[vertex_id]],
                                VertexIn vertexData [[stage_in]],
                                uint instance_id [[instance_id]],
                                constant CubeShadowUniforms& uniforms [[buffer(BindingsPipelineUniforms)]],
-                               constant float4x4* instanceData [[buffer(BindingsInstanceData)]]) {
-
+                               constant InstanceData* instanceData [[buffer(BindingsInstanceData)]]) {
+    InstanceData instance = instanceData[instance_id];
     VertexOut o;
-    float4x4 model = instanceData[instance_id];
+    float4x4 model = instance.model;
     float4 localPos = float4(vertexData.position, 1.0);
     o.worldPos = (model * localPos).xyz;
     float4x4 mvp = uniforms.projection * uniforms.view* model;

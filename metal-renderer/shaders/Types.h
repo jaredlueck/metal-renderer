@@ -21,6 +21,10 @@ struct Material {
     float4 baseColor;
 };
 
+struct InstanceData {
+    float4x4 model;
+    float3x3 normalMatrix;
+};
 
 
 

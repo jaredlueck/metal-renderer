@@ -10,6 +10,7 @@ import MetalKit
 
 class Model {
     let meshes: [MTKMesh]
+    let path: String
     public let asset: MDLAsset
     init(device: MTLDevice, resourceName: String, ext: String = "obj") {
         guard let url = Bundle.main.url(forResource: resourceName, withExtension: ext) else {
@@ -23,6 +24,7 @@ class Model {
         } catch {
             fatalError("Failed to create MTKMesh from asset: \(error)")
         }
+        path = resourceName + ".\(ext)"
     }
     
     init(device: MTLDevice, path: String){
@@ -35,5 +37,6 @@ class Model {
         } catch {
             fatalError("Failed to create MTKMesh from asset: \(error)")
         }
+        self.path = path
     }
 }

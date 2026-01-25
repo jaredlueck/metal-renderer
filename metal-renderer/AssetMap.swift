@@ -17,6 +17,8 @@ class AssetMap : Codable{
         case assets
     }
     
+    init(){}
+    
     required init(from decoder: any Decoder) throws {
         let values = try! decoder.container(keyedBy: CodingKeys.self)
         self.assets = try! values.decode([AssetEntry].self, forKey: .assets)

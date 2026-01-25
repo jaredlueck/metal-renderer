@@ -16,9 +16,16 @@ enum TransformMode {
     case rotate
 }
 
-struct ArrowGizmo{
+struct ArrowGizmo {
     var selected: Bool = false
     var direction: SIMD3<Float>
+}
+
+struct CircleUniforms {
+    var radius: simd_float1
+    var thickness: simd_float1
+    var color: SIMD3<Float>;
+    var center: SIMD2<Float>
 }
 
 class Editor {
@@ -37,6 +44,9 @@ class Editor {
     
     let canvasShader: ShaderProgram
     let canvasPipeline: RenderPipeline
+    
+    let circleShader: ShaderProgram
+    let circlePipeline: RenderPipeline
     
     let device: MTLDevice
     let descriptor: MTLRenderPassDescriptor;
@@ -97,6 +107,9 @@ class Editor {
         
         try! self.canvasShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "canvasVertex", fragmentName: "canvasFragment"))
         self.canvasPipeline = RenderPipeline(device: device, program: self.canvasShader, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
+        
+        try! self.circleShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "outlineVertex", fragmentName: "circleFragment"))
+        self.circlePipeline = RenderPipeline(device: device, program: self.circleShader, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
         self.device = device
         
         let assetsURL = Bundle.main.bundleURL.appending(component: "Contents/Resources")
@@ -105,7 +118,6 @@ class Editor {
         
         self.view = view
         self.scene = scene
-        scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
         self.assetManager = assetManager
         self.editorView = matrix_lookAt(eye: editorCameraPosition, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
         let size = view.bounds.size
@@ -115,7 +127,7 @@ class Editor {
         self.editorProjection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
         
         let textureLoader = MTKTextureLoader(device: device)
-        guard let url = Bundle.main.url(forResource: "spotlight", withExtension: "png") else {
+        guard let url = Bundle.main.url(forResource: "pointlight", withExtension: "png") else {
             fatalError("could not find spotlight texture")
         }
         do {
@@ -212,7 +224,7 @@ class Editor {
         let width = Float(view.drawableSize.width)
         let height = Float(view.drawableSize.height)
         let xPixel = (ndc.x + 1) * (width/2)
-        let yPixel = (ndc.y + 1) * (height/2)
+        let yPixel = height - (ndc.y + 1) * (height/2)
         return SIMD2(xPixel, yPixel)
     }
     
@@ -220,7 +232,7 @@ class Editor {
         let width = Float(view.drawableSize.width)
         let height = Float(view.drawableSize.height)
         let x = (2.0 * pixel.x) / width - 1.0
-        let y = (2.0 * pixel.y) / height - 1.0
+        let y = (-2.0 * pixel.y) / height + 1.0
         return SIMD3(x, y, depth)
     }
     
@@ -233,9 +245,11 @@ class Editor {
     }
     
     // draw a light icon and a ring in screen space showing the radius
-    func drawLightIcon(encoder: MTLRenderCommandEncoder, position: SIMD3<Float>){
+    func drawLightIcon(encoder: MTLRenderCommandEncoder, light: PointLight){
         encoder.pushDebugGroup("Pointlight canvas")
-        let iconSize = 75
+        let position = light.position[SIMD3(0, 1, 2)]
+        canvasPipeline.bind(encoder: encoder)
+        let iconSize = 100
         // project position into pixel space
         let viewPos = editorView * SIMD4<Float>(position, 1.0)
         let clipPos = editorProjection * viewPos
@@ -245,14 +259,14 @@ class Editor {
             return
         }
         let pixelCoords = NDCToScreenSpace(ndc: ndc[SIMD3(0, 1, 2)])
-        
+
         let tl = SIMD2(pixelCoords.x - Float(iconSize/2), pixelCoords.y - Float(iconSize/2))
         let tr = SIMD2(pixelCoords.x + Float(iconSize/2), pixelCoords.y - Float(iconSize/2))
         let br = SIMD2(pixelCoords.x + Float(iconSize/2), pixelCoords.y + Float(iconSize/2))
         let bl = SIMD2(pixelCoords.x - Float(iconSize/2), pixelCoords.y + Float(iconSize/2))
-        
+
         let uvs: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
-        
+
         let tlWorld = ScreenSpaceToWorld(pixel: tl, depth: ndc.z)
         let trWorld = ScreenSpaceToWorld(pixel: tr, depth: ndc.z)
         let brWorld = ScreenSpaceToWorld(pixel: br, depth: ndc.z)
@@ -261,28 +275,36 @@ class Editor {
         let v2: [Float] = [trWorld.x, trWorld.y, trWorld.z, 1.0, 1.0, 1.0, uvs[1].x, uvs[1].y]
         let v3: [Float] = [brWorld.x, brWorld.y, brWorld.z, 1.0, 1.0, 1.0, uvs[2].x, uvs[2].y]
         let v4: [Float] = [blWorld.x, blWorld.y, blWorld.z, 1.0, 1.0, 1.0, uvs[3].x, uvs[3].y]
-        
+
         let vertices = v1 + v2 + v3 + v4
-        
+
         encoder.setFragmentTexture(spotLightTexture, index: Bindings.baseTexture)
         encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
-        
+
         guard let vertexBuffer = device.makeBuffer(length: MemoryLayout<Float>.stride * vertices.count) else { fatalError() }
         let vP = vertexBuffer.contents().bindMemory(to: Float.self, capacity: vertices.count)
         vP.update(from: vertices, count: vertices.count)
-        
+
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         
         let indices: [UInt16] = [0, 1, 3, 3, 1, 2]
-        
+
         guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * 6) else { fatalError()}
         let iP = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: 6)
         iP.update(from: indices, count: 6)
-        
+
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: indices.count, indexType: MTLIndexType.uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
+
         encoder.popDebugGroup()
     }
     
+    func drawLightRadius(encoder: MTLRenderCommandEncoder, position: SIMD3<Float>, radius: Float){
+        uniformColorPipeline.bind(encoder: encoder)
+        var color = SIMD3<Float>(1.0, 1.0, 1.0)
+        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD3<Float>>.stride, index: Bindings.pipelineUniforms)
+        drawRadius(encoder: encoder, origin: position, radius: radius)
+    }
+        
     func computeArrowHeadVertices(shaftLength: Float, headLength: Float, radius: Float) -> (vertices: [SIMD3<Float>], indices: [UInt16]) {
         let vertices: [SIMD3<Float>] = [
             // Circle center
@@ -589,12 +611,16 @@ class Editor {
             drawArrowGizmo(encoder: encoder, transform: xTransform, color: SIMD3<Float>(0.5, 0.0, 0.0), selected: xAxisSelected)
             drawArrowGizmo(encoder: encoder, transform: yTransform, color: SIMD3<Float>(0.0, 0.5, 0.0), selected: yAxisSelected)
         }
-        
-        canvasPipeline.bind(encoder: encoder)
+
         let sceneLights = scene.getLights()
 
         for light in sceneLights {
-            drawLightIcon(encoder: encoder, position: light.position[SIMD3(0, 1, 2)])
+            drawLightIcon(encoder: encoder, light: light)
+        }
+        
+        if let node = selectedEntity,
+           let radius = node.lightData?.radius {
+            drawLightRadius(encoder: encoder, position: node.transform.position, radius: radius)
         }
 
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
@@ -665,14 +691,13 @@ class Editor {
         if let selectedEntity = selectedEntity {
             ImGuiSetNextWindowPos(ImVec2(x: 10, y: 200), 0, ImVec2(x: 0, y: 0))
             ImGuiBegin("Object Details", &show_demo_window, 0)
-//            ImGuiSetWindowFontScale(0.3)
-            if ImGuiButtonEx("translation", ImVec2(x: 30, y: 30), 0) {
+            if ImGuiButtonEx("translation", ImVec2(x: 40, y: 30), 0) {
                 transformMode = .translate
             }
-            if ImGuiButton("scale", ImVec2(x: 30, y: 30)) {
+            if ImGuiButton("scale", ImVec2(x: 40, y: 30)) {
                 transformMode = .scale
             }
-            ImGuiButton("rotation", ImVec2(x: 30, y: 30))
+            ImGuiButton("rotation", ImVec2(x: 40, y: 30))
             withUnsafeMutablePointer(to: &selectedEntity.castShadows) { ptr in
                 if ImGuiCheckbox("casts shadows", ptr) {
                     print("selected")
@@ -684,7 +709,18 @@ class Editor {
         ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), 1 << 1, ImVec2(x: 1, y: 0))
         ImGuiBegin("Scene Hierarchy", &show_demo_window, 0)
         if ImGuiButton("Save", ImVec2(x: 50, y: 50)) {
-            print("save")
+            let encoder = JSONEncoder()
+            let data = try! encoder.encode(self.scene)
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print(jsonString)
+            }
+            let fileManager = FileManager.default
+            let url = URL(filePath: "/Users/jaredlueck/Documents/programming/metal-swift-new/metal-renderer/persistance")
+            let fileURL = url.appendingPathComponent("scene.json")
+            
+            try! data.write(to: fileURL)
+            
+            assetManager.writeAssetMapToFile()
         }
         ImGuiEnd()
 
@@ -734,6 +770,55 @@ class Editor {
         let drawData = ImGuiGetDrawData()!
 
         ImGui_ImplMetal_RenderDrawData(drawData.pointee, commandBuffer, encoder)
+    }
+    
+    func drawRadius(encoder: MTLRenderCommandEncoder, origin: SIMD3<Float>, radius: Float){
+       
+        let square: [SIMD2<Float>] = [SIMD2<Float>(radius, radius), SIMD2<Float>(-radius, radius), SIMD2<Float>(-radius, -radius), SIMD2<Float>(radius, -radius)]
+        let circle = subdivideClosedPolygon(polygon: square, count: 10)
+        
+        var xyCircle = circle.map { vert2d in SIMD3<Float>(origin.x + vert2d.x, origin.y + vert2d.y, origin.z) }
+        xyCircle.append(xyCircle[0])
+        
+        var yzCircle = circle.map { vert2d in SIMD3<Float>(origin.x, origin.y + vert2d.y, origin.z + vert2d.x) }
+        yzCircle.append(yzCircle[0])
+        
+        var xzCircle = circle.map { vert2d in SIMD3<Float>(origin.x + vert2d.x, origin.y, origin.z + vert2d.y) }
+        xzCircle.append(xzCircle[0])
+        
+        var transform = matrix_identity_float4x4
+        encoder.setVertexBytes(&transform, length: MemoryLayout<simd_float4x4>.stride , index: Bindings.instanceData)
+        
+        let xyBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * xyCircle.count)
+        let xyPtr = xyBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: xyCircle.count)
+        xyPtr?.update(from: xyCircle, count: xyCircle.count)
+        encoder.setVertexBuffer(xyBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: xyCircle.count)
+
+        let yzBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * yzCircle.count)
+        let yzPtr = yzBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: yzCircle.count)
+        yzPtr?.update(from: yzCircle, count: yzCircle.count)
+        encoder.setVertexBuffer(yzBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: yzCircle.count)
+        
+        let xzBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * xzCircle.count)
+        let xzPtr = xzBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: xzCircle.count)
+        xzPtr?.update(from: xzCircle, count: xzCircle.count)
+        encoder.setVertexBuffer(xzBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: xzCircle.count)
+    }
+    
+    func subdivideClosedPolygon(polygon: [SIMD2<Float>], count: Int) -> [SIMD2<Float>]{
+        if count == 0{
+            return polygon
+        }
+        var newVerts: [SIMD2<Float>] = Array(repeating: SIMD2<Float>(repeating: 0.0), count: 2 * polygon.count)
+        newVerts.replaceSubrange(0..<polygon.count, with: polygon)
+        for i in 0..<polygon.count{
+            newVerts[2*i] = 0.75 * polygon[i] + 0.25 * polygon[(i + 1) % polygon.count]
+            newVerts[2*i+1] = 0.25 * polygon[i] + 0.75 * polygon[(i + 1) % polygon.count]
+        }
+        return subdivideClosedPolygon(polygon: newVerts, count: count - 1)
     }
     
     static func computeBoundingBox(vertices: [SIMD3<Float>]) -> MDLAxisAlignedBoundingBox{
@@ -787,7 +872,7 @@ class Editor {
         self.mouseX = px
         self.mouseY = py
     }
-    
+
     // TODO: convert to use a BVH tree
     // Cast a ray from the camera mouse click position into the screen and calculate
     // if it intersects with any objects in the scene.
@@ -938,8 +1023,6 @@ class Editor {
         else if zAxisSelected {
             proj.z = diff.z
         }
-        var translation = matrix_identity_float4x4
-        var scale = matrix_identity_float4x4
         // update the transform with translation
         if transformMode == .translate {
             selectedObj.transform.position = selectedObj.transform.position + proj

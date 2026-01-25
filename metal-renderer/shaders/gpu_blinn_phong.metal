@@ -45,16 +45,16 @@ struct LightData {
     uint pointLightCount; // 4
 };
 
-
 float3 calculatePointLightColor(PointLight light, float3 fragmentPosition);
 
 vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
                              uint instance_id [[instance_id]],
                              VertexIn vertexData [[stage_in]],
-                             constant float4x4* instanceData [[buffer(BindingsInstanceData)]],
+                             constant InstanceData* instanceData [[buffer(BindingsInstanceData)]],
                              constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]) {
+    InstanceData instance = instanceData[instance_id];
+    float4x4 model = instance.model;
     
-    float4x4 model = instanceData[instance_id];
     VertexOut o;
     float4 localPos = float4(vertexData.position, 1.0);
     o.worldPos = (model * localPos).xyz;
@@ -100,8 +100,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
         float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
         float3 shadowDir = normalize(in.worldPos - light.position.xyz);
         
-        // Sample normalized distance from the cube array using the NON-compare shadow sampler
-        float shadowFactor =  receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
+        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
         
         float3 lightColor = calculatePointLightColor(light, in.worldPos);
         
@@ -109,7 +108,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
         float lightSpec = pow(max(dot(N, H), 0.0), 64);
         
         diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
-        specular +=  shadowFactor * lightSpec * lightColor;
+        specular += shadowFactor * lightSpec * lightColor * lightColor;
     }
 
     float3 result = ambient + diffuse + specular;

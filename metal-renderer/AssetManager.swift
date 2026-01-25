@@ -49,5 +49,17 @@ public class AssetManager {
     func getAssetById(_ id: String) -> Model? {
         return self.assetMap[id]
     }
+    
+    func writeAssetMapToFile(){
+        let assetMapToWrite = AssetMap()
+        for (id, model) in self.assetMap {
+            assetMapToWrite.assets.append(AssetEntry(id: id, path: model.path))
+        }
+        let encoder = JSONEncoder()
+        let jsonData = try! encoder.encode(assetMapToWrite)
+        let url = URL(filePath: "/Users/jaredlueck/Documents/programming/metal-swift-new/metal-renderer/persistance")
+        let fileURL = url.appendingPathComponent("assets.json")
+        try! jsonData.write(to: fileURL)
+    }
 }
 

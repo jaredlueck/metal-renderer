@@ -68,6 +68,7 @@ public class Node: Codable {
         self.id = try! values.decode(String.self, forKey: .id)
         self.children = try! values.decode([Node].self, forKey: .children)
         self.assetId = try! values.decodeIfPresent(String.self, forKey: .assetId)
+        self.lightData = try! values.decodeIfPresent(LightSceneData.self, forKey: .lightData)
     }
 }
 

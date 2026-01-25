@@ -12,6 +12,11 @@ struct Material {
     let baseColor: SIMD3<Float>
 }
 
+struct InstanceData {
+    var model: simd_float4x4
+    var normalMatrix: simd_float3x3
+}
+
 class Instance {
     var id: String
     var transform: Transform
@@ -52,13 +57,10 @@ class InstancedRenderable {
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
-        var transforms: [float4x4] = []
-        transforms = (instanceId.flatMap { id in instances.first(where: { $0.id == id }) }.map { [$0.transform.getMatrix()] })
-        ?? instances.map { $0.transform.getMatrix() }
-        
-        let bufferlength = MemoryLayout<simd_float4x4>.stride * transforms.count
+        let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix()) }
+        let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
 
-        transforms.withUnsafeBytes { rawBuffer in
+        instanceData.withUnsafeBytes { rawBuffer in
             renderEncoder.setVertexBytes(
                 rawBuffer.baseAddress!,
                 length: bufferlength,
@@ -103,7 +105,7 @@ class InstancedRenderable {
                             indexType: indexType,
                             indexBuffer: mtkIndexBuffer.buffer,
                             indexBufferOffset: 0,
-                            instanceCount: transforms.count,
+                            instanceCount: instanceData.count,
                         )
                     }
                 }

@@ -121,9 +121,8 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         
-        if shadowCasterInstances.count > 0 {
-            shadowPass.encode(commandBuffer: commandBuffer, lights: data.pointLights, cubeTextureArray: sharedResources.pointLightShadowAtlas, shadowCasters: shadowCasterInstances )
-        }
+        shadowPass.encode(commandBuffer: commandBuffer, lights: data.pointLights, cubeTextureArray: sharedResources.pointLightShadowAtlas, shadowCasters: shadowCasterInstances )
+        
         colorPass.encode(commandBuffer: commandBuffer, pointLights: data.pointLights, renderables: renderables  ,sharedResources: &sharedResources)
         outlinePass.renderHUD(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         outlinePass.renderUI(commandBuffer: commandBuffer, sharedResources: &sharedResources)

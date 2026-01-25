@@ -28,7 +28,7 @@ let faceUps: [SIMD3<Float>] = [
     SIMD3<Float>(0, -1,  0),
     SIMD3<Float>(0, -1,  0),
     SIMD3<Float>(0,  0,  1),
-    SIMD3<Float>(0,  0,  1),
+    SIMD3<Float>(0,  0,  -1),
     SIMD3<Float>(0, -1,  0),
     SIMD3<Float>(0, -1,  0)
 ]
@@ -72,6 +72,8 @@ class ShadowPass {
                     encoder.setVertexBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
                     encoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
                 }
+                
+                encoder.setCullMode(MTLCullMode.front)
 
                 pipeline.bind(encoder: encoder)
                 

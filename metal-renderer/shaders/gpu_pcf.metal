@@ -20,6 +20,7 @@ static inline float PCFCube(texturecube_array<float> shadowAtlas,
               uint kernelSize = 3)
 {
     dir = normalize(dir);
+    dir.y = -dir.y;
 
     float3 up = (abs(dir.y) > 0.99) ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
 
@@ -56,10 +57,8 @@ static inline float PCF(depth2d<float> shadowMap, uint2 pixel, float receiverDep
     int width = (int)shadowMap.get_width();
     int height = (int)shadowMap.get_height();
 
-    // Accumulator for how many samples are lit (receiver not in shadow)
     float sum = 0.0;
 
-    // Define half-size of the kernel; iterate from -k to +k inclusive for a square kernel
     int k = (int)kernelSize;
 
     for (int dx = -k; dx <= k; dx++) {
@@ -71,13 +70,11 @@ static inline float PCF(depth2d<float> shadowMap, uint2 pixel, float receiverDep
             sy = clamp(sy, 0, height-1);
 
             float depth = shadowMap.read(uint2((uint)sx, (uint)sy));
-            // If receiver depth is in front of the stored depth, it's lit (PCF style)
             if (receiverDepth <= depth) {
                 sum += 1.0;
             }
         }
     }
-    // Normalize by the number of samples taken: (2k + 1)^2
     float samples = (float)((2 * k + 1) * (2 * k + 1));
     return sum / samples;
 }

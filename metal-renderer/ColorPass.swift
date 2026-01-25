@@ -72,9 +72,9 @@ class ColorPass {
                 
         encoder.pushDebugGroup("render meshes")
         encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
-                        
+        
         let lightBuffer = pointLights.withUnsafeBufferPointer { bufferPtr in
-             return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * pointLights.count)
+             return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * max(pointLights.count, 1))
         }
         
         encoder.setFragmentBuffer(lightBuffer, offset: 0, index: Bindings.lightData)
