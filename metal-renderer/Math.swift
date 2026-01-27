@@ -7,7 +7,15 @@
 
 import simd
 
-// Generic matrix math utility functions
+func distance(p1: SIMD2<Float>, p2: SIMD2<Float>) -> Float{
+    return sqrt((p1[1]-p2[1])*(p1[1]-p2[1]) + (p1[0]-p2[0])*(p1[0]-p2[0]))
+}
+
+// compute distance between a point x and a line defined by p1 and p2
+func distance(p1: SIMD2<Float>, p2: SIMD2<Float>, x: SIMD2<Float>) -> Float {
+    return abs((p2[1] - p1[1])*x[0] - (p2[0] - p1[0])*x[1] + p2[0]*p1[1] - p2[1]*p1[0])/sqrt((p1[1]-p2[1])*(p1[1]-p2[1]) + (p1[0]-p2[0])*(p1[0]-p2[0]))
+}
+
 func matrix4x4_rotation(radians: Float, axis: SIMD3<Float>) -> matrix_float4x4 {
     let unitAxis = normalize(axis)
     let ct = cosf(radians)
@@ -45,19 +53,17 @@ func matrix_perspective_right_hand(fovyRadians fovy: Float, aspectRatio: Float, 
 }
 
 func matrix_orthographic_right_hand(left: Float, right: Float, bottom: Float, top: Float, nearZ: Float, farZ: Float) -> matrix_float4x4 {
-    // nearZ and farZ are positive distances; camera looks down -Z.
-    // This directly maps Z to [0, 1] for Metal.
     let rml = right - left
     let tmb = top - bottom
     let fn = farZ - nearZ
 
     let sx = 2.0 / rml
     let sy = 2.0 / tmb
-    let sz = -1.0 / fn  // maps depth to [0,1] for Metal in RH
+    let sz = -1.0 / fn
 
     let tx = -(right + left) / rml
     let ty = -(top + bottom) / tmb
-    let tz = -nearZ / fn      // 0 at near, 1 at far
+    let tz = -nearZ / fn
 
     return matrix_float4x4(columns: (
         SIMD4<Float>( sx,  0,  0, 0),

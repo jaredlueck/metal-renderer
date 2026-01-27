@@ -87,10 +87,22 @@ class GameViewController: NSViewController {
         let py = Float(pixelPoint.y)
         
         self.editor.AABBintersect(px: px, py: py)
+        self.editor.transformGizmo.clearSelection()
     }
     
+    // TODO: simplify code to get mouse pixel coords
     override func mouseDown(with event: NSEvent) {
         ImGui_ImplOSX_HandleEvent(event, view)
+        guard let mtkView = self.mtkView else { return }
+        let windowPoint = event.locationInWindow
+        let viewPoint = mtkView.convert(windowPoint, from: nil)
+
+        let scale = mtkView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1.0
+        let pixelPoint = CGPoint(x: viewPoint.x * scale, y: viewPoint.y * scale)
+
+        let px = Float(pixelPoint.x)
+        let py = Float(pixelPoint.y)
+        self.editor.mouseDown(px: px, py: py)
     }
     
     override func mouseMoved(with event: NSEvent) {

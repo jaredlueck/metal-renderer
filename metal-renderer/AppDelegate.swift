@@ -25,6 +25,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let viewController = GameViewController()
         window.contentViewController = viewController
         window.makeKeyAndOrderFront(nil)
+        // Create the main menu bar
+        let mainMenu = NSMenu()
+        NSApp.mainMenu = mainMenu
+
+        // Create the "File" menu item that appears in the menu bar
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+
+        // Create the actual "File" submenu
+        let fileMenu = NSMenu(title: "File")
+        fileMenuItem.submenu = fileMenu
+
+        // Add a "Save" command to the File submenu
+        let saveItem = NSMenuItem(
+            title: "Save",
+            action: #selector(Editor.saveScene(_:)),
+            keyEquivalent: "s"
+        )
+        // Set the target to your responder (AppDelegate or a document/controller)
+        saveItem.target = viewController.editor
+        fileMenu.addItem(saveItem)
+                
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

@@ -115,15 +115,15 @@ class Renderer: NSObject, MTKViewDelegate {
             }
         }
 
-        self.sharedResources.viewMatrix = outlinePass.editorView
-        self.sharedResources.projectionMatrix = outlinePass.editorProjection
-        self.sharedResources.cameraPos = SIMD4<Float>(outlinePass.editorCameraPosition, 1.0)
+        self.sharedResources.viewMatrix = outlinePass.editorCamera.lookAtMatrix()
+        self.sharedResources.projectionMatrix = outlinePass.editorCamera.projectionMatrix
+        self.sharedResources.cameraPos = SIMD4<Float>(outlinePass.editorCamera.position, 1.0)
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         
         shadowPass.encode(commandBuffer: commandBuffer, lights: data.pointLights, cubeTextureArray: sharedResources.pointLightShadowAtlas, shadowCasters: shadowCasterInstances )
         
-        colorPass.encode(commandBuffer: commandBuffer, pointLights: data.pointLights, renderables: renderables  ,sharedResources: &sharedResources)
+        colorPass.encode(commandBuffer: commandBuffer, pointLights: data.pointLights, renderables: renderables, sharedResources: &sharedResources)
         outlinePass.renderHUD(commandBuffer: commandBuffer, sharedResources: &sharedResources)
         outlinePass.renderUI(commandBuffer: commandBuffer, sharedResources: &sharedResources)
 
@@ -142,7 +142,8 @@ class Renderer: NSObject, MTKViewDelegate {
         let width = Int(size.width)
         let height = Int(size.height)
         self.sharedResources.projectionMatrix = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
-        self.outlinePass.editorProjection = self.sharedResources.projectionMatrix
+        self.outlinePass.editorCamera.updateProjection(drawableSize: size)
+        outlinePass.editorCamera.viewportSize = SIMD2<Float>(Float(width), Float(height))
         
         sharedResources.depthTextureDescriptor.height = height
         sharedResources.depthTextureDescriptor.width = width
