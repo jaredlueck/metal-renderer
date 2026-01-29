@@ -64,6 +64,4 @@ kernel void blurOutline(texture2d<float> mask [[texture(0)]], texture2d<float> b
     float blurVal = blur.read(gid).r;
     float outlineVal = maskVal == 1.0 ? 0.0 : blurVal;
     outline.write(outlineVal, gid);
-        
-    
 }

@@ -36,7 +36,7 @@ class MaskPass {
         withUnsafeBytes(of: sharedResources.makeFrameUniforms()) { rawBuffer in
             encoder.setVertexBytes(rawBuffer.baseAddress!,
                                            length: MemoryLayout<FrameUniforms>.stride,
-                                     index: Bindings.frameUniforms)
+                                   index: Int(BufferIndexInstanceData.rawValue))
         }
                 
         self.maskPipeline.bind(encoder: encoder)

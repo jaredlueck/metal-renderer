@@ -8,15 +8,6 @@ import Metal
 import MetalKit
 import ModelIO
 
-struct Material {
-    let baseColor: SIMD3<Float>
-}
-
-struct InstanceData {
-    var model: simd_float4x4
-    var normalMatrix: simd_float3x3
-}
-
 class Instance {
     var id: String
     var transform: Transform
@@ -57,36 +48,38 @@ class InstancedRenderable {
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
-        let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix()) }
-        let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
 
-        instanceData.withUnsafeBytes { rawBuffer in
-            renderEncoder.setVertexBytes(
-                rawBuffer.baseAddress!,
-                length: bufferlength,
-                index: Bindings.instanceData
-            )
-        }
 
         for i in 0..<model.asset.count {
             guard let mdlMesh = model.asset.object(at: i) as? MDLMesh else { continue }
 
             if let mtkBuffer = mdlMesh.vertexBuffers.first as? MTKMeshBuffer {
-                renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: Bindings.vertexBuffer)
+                renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
             }
 
             if let mdlSubmeshes = mdlMesh.submeshes as? [MDLSubmesh] {
                 for mdlSubmesh in mdlSubmeshes {
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
-                    let material = mdlSubmesh.material
-                    let baseColorPropery = material?.propertyNamed("baseColor")
-                    let baseColor = baseColorPropery?.float3Value
-                    var materialUniform = Material(baseColor: baseColor ?? .zero)
+                    let material = mdlSubmesh.material!
                     
-                    withUnsafeBytes(of: &materialUniform )  { rawBuffer in
-                        renderEncoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<Material>.stride, index: Bindings.materialData)
-                        
+                    let baseColorPropery = material.propertyNamed("baseColor")!
+                    let baseColor = baseColorPropery.float4Value
+                    
+                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: baseColor) }
+                    let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
+
+                    instanceData.withUnsafeBytes { rawBuffer in
+                        renderEncoder.setVertexBytes(
+                            rawBuffer.baseAddress!,
+                            length: bufferlength,
+                            index: Int(BufferIndexInstanceData.rawValue)
+                        )
+                        renderEncoder.setFragmentBytes(
+                            rawBuffer.baseAddress!,
+                            length: bufferlength,
+                            index: Int(BufferIndexInstanceData.rawValue)
+                        )
                     }
                     
                     switch mdlSubmesh.indexType {

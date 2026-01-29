@@ -54,7 +54,7 @@ public class AssetsWindow {
             }
             if ImGuiBeginDragDropSource(0) {
                 ImGuiTextV("Pointlight")
-                var bytes: [UInt8] = Array("pointLight".utf8) + [0]
+                let bytes: [UInt8] = Array("pointLight".utf8) + [0]
                 bytes.withUnsafeBytes { rawBuffer in
                     if let base = rawBuffer.baseAddress {
                         ImGuiSetDragDropPayload("LIGHT_SOURCE", base, rawBuffer.count, 0)
@@ -78,6 +78,5 @@ public class AssetsWindow {
             let rv = try url.resourceValues(forKeys: [.isDirectoryKey])
             return rv.isDirectory != true && url.pathExtension.lowercased() == "obj"
         }
-        
     }
 }

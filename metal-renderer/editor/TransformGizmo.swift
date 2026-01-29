@@ -25,31 +25,10 @@ public class TransformGizmo {
     var yAxisSelected: Bool = false
     var zAxisSelected: Bool = false
     
-    var moveToolTexture: MTLTexture
-    var rotateToolTexture: MTLTexture
-    var scaleToolTexture: MTLTexture
-    
     init(device: MTLDevice){
         self.xAxis = ArrowGizmo(device: device, rotation: matrix4x4_rotation(radians: radians_from_degrees(90), axis: SIMD3<Float>(0,1,0)), color: xAxisColor)
         self.yAxis = ArrowGizmo(device: device, rotation: matrix4x4_rotation(radians: radians_from_degrees(-90), axis: SIMD3<Float>(1,0,0)), color: yAxisColor)
         self.zAxis = ArrowGizmo(device: device, rotation: matrix_identity_float4x4, color: zAxisColor)
-        
-        let textureLoader = MTKTextureLoader(device: device)
-        
-//        let pointlightIconTextureUrl = Bundle.main.url(forResource: "pointlight", withExtension: "png")!
-//        spotLightTexture = try! textureLoader.newTexture(URL: pointlightIconTextureUrl)
-
-        let moveToolTextureUrl = Bundle.main.url(forResource: "movetool", withExtension: "png")!
-        moveToolTexture = try! textureLoader.newTexture(URL: moveToolTextureUrl)
-
-        let rotateToolTextureUrl = Bundle.main.url(forResource: "rotatetool", withExtension: "png")!
-        rotateToolTexture = try! textureLoader.newTexture(URL: rotateToolTextureUrl)
-
-        let scaleToolTextureUrl = Bundle.main.url(forResource: "scaletool", withExtension: "png")!
-        scaleToolTexture = try! textureLoader.newTexture(URL: scaleToolTextureUrl)
-        
-        var error: NSError? = nil
-        textureLoader.newTextures(URLs: [moveToolTextureUrl, rotateToolTextureUrl, scaleToolTextureUrl], error: &error)
     }
     
     func encode(encoder: MTLRenderCommandEncoder, mouseX: Float, mouseY: Float, editorCamera: Camera, position: SIMD3<Float>){
@@ -63,44 +42,7 @@ public class TransformGizmo {
         zAxis.encode(encoder: encoder, position: position, editorCamera: editorCamera, selected: zAxisHovered, transformMode: transformMode)
         
         ImGuiSetNextWindowPos(ImVec2(x: 10, y: 200), 0, ImVec2(x: 0, y: 0))
-        var show = true
-        ImGuiBegin("gizmos", &show, Int32(ImGuiWindowFlags_NoTitleBar.rawValue))
-        withUnsafePointer(to: &moveToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Move Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformMode = .translate
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Move Tool")
-                ImGuiEndTooltip()
-            }
-        }
-        
-        withUnsafePointer(to: &rotateToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Rotate Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformMode = .rotate
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Rotate Tool")
-                ImGuiEndTooltip()
-            }
-        }
-
-        withUnsafePointer(to: &scaleToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Scale Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformMode = .scale
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Scale Tool")
-                ImGuiEndTooltip()
-            }
-        }
-        ImGuiEnd()
+      
     }
     
     func setSelectedAxis(mouseX: Float, mouseY: Float, editorCamera: Camera, position: SIMD3<Float>){

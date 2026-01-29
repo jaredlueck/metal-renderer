@@ -7,8 +7,7 @@
 
 #include <metal_stdlib>
 #include <metal_simdgroup_matrix>
-#include "gpu_pcf.metal"
-#include "Bindings.h"
+#include "PCF.metal"
 #include "Types.h"
 
 using namespace metal;
@@ -27,31 +26,14 @@ struct VertexOut {
     float3 worldPos;
     float3 worldNormal;
 };
- 
-struct UniformsAB {
-    float4x4 view;
-    float4x4 projection;
-};
-
-struct PointLight {
-    float4 position;
-    float4 color;
-    float  radius;
-};
-
-struct LightData {
-    const device PointLight* pointLights; // 0, 1, 2
-    texturecube_array<float> pointLightShadowMaps; // 3
-    uint pointLightCount; // 4
-};
 
 float3 calculatePointLightColor(PointLight light, float3 fragmentPosition);
 
 vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
                              uint instance_id [[instance_id]],
                              VertexIn vertexData [[stage_in]],
-                             constant InstanceData* instanceData [[buffer(BindingsInstanceData)]],
-                             constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]) {
+                             constant InstanceData* instanceData [[buffer(BufferIndexInstanceData)]],
+                             constant FrameData& uniforms [[buffer(BufferIndexFrameData)]]) {
     InstanceData instance = instanceData[instance_id];
     float4x4 model = instance.model;
     
@@ -74,13 +56,17 @@ vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
 }
 
 fragment float4 phongFragment(VertexOut in [[stage_in]],
-                                 sampler s [[sampler(0)]],
-                                 sampler shadowSampler [[sampler(1)]],
-                                 constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]],
-                                 constant PointLight* pointLights [[buffer(BindingsLightData)]],
-                                 constant uint& lightCount [[buffer(BindingsPointLightCount)]],
-                                 texturecube_array<float> shadowAtlas [[texture(BindingsShadowAtas)]],
-                                 constant Material& material [[buffer(BindingsMaterialData)]]) {
+                                 sampler s [[sampler(SamplerIndexDefault)]],
+                                 sampler shadowSampler [[sampler(SamplerIndexCube)]],
+                                 constant FrameData& uniforms [[buffer(BufferIndexFrameData)]],
+                                 constant PointLight* pointLights [[buffer(BufferIndexLightData)]],
+                                 constant uint& lightCount [[buffer(BufferIndexPointLightCount)]],
+                                 texturecube_array<float> shadowAtlas [[texture(TextureIndexShadow)]],
+                                 constant InstanceData& material [[buffer(BufferIndexInstanceData)]]) {
+    constexpr sampler linearSampler (mip_filter::linear,
+                                     mag_filter::linear,
+                                     min_filter::linear);
+    
     // Compute normalized view vector from surface to camera in world space
     float3 N = normalize(in.normal);
     float3 V = normalize(-in.viewPos);
@@ -100,7 +86,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
         float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
         float3 shadowDir = normalize(in.worldPos - light.position.xyz);
         
-        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, shadowSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
+        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
         
         float3 lightColor = calculatePointLightColor(light, in.worldPos);
         

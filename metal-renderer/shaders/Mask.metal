@@ -4,10 +4,9 @@
 //
 //  Created by Jared Lueck on 2025-12-28.
 //
-
+#include <simd/simd.h>
 #include <metal_stdlib>
 #include "Types.h"
-#include "Bindings.h"
 using namespace metal;
 
 struct VertexIn {
@@ -22,11 +21,12 @@ struct VertexOut {
 vertex VertexOut maskVertex(uint vertex_id [[vertex_id]],
                             uint instance_id [[instance_id]],
                             VertexIn vertexData [[stage_in]],
-                            constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]],
-                            constant float4x4* instanceData [[buffer(BindingsInstanceData)]]) {
+                            constant FrameData& uniforms [[buffer(BufferIndexFrameData)]],
+                            constant InstanceData* instanceData [[buffer(BufferIndexInstanceData)]]) {
 
     VertexOut o;
-    float4x4 model = instanceData[instance_id];
+    InstanceData instance = instanceData[instance_id];
+    float4x4 model = instance.model;
     float4 localPos = float4(vertexData.position, 1.0);
     o.worldPos = (model * localPos).xyz;
     float4x4 mvp = uniforms.projection * uniforms.view * model;

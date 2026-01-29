@@ -1,5 +1,5 @@
 //
-//  CubeShadowRenderPass.swift
+//  ShadowPass.swift
 //  metal-swift-new
 //
 //  Created by Jared Lueck on 2025-12-29.
@@ -14,24 +14,6 @@ struct ShadowUniforms {
     var position: simd_float4
     var radius: simd_float1
 }
-
-let faceDirections: [SIMD3<Float>] = [
-    SIMD3<Float>( 1,  0,  0),
-    SIMD3<Float>(-1,  0,  0),
-    SIMD3<Float>( 0,  1,  0),
-    SIMD3<Float>( 0, -1,  0),
-    SIMD3<Float>( 0,  0,  1),
-    SIMD3<Float>( 0,  0, -1)
-]
-
-let faceUps: [SIMD3<Float>] = [
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0,  0,  1),
-    SIMD3<Float>(0,  0,  -1),
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0, -1,  0)
-]
 
 class ShadowPass {
     let descriptor: MTLRenderPassDescriptor;
@@ -69,8 +51,8 @@ class ShadowPass {
                 var uniforms = ShadowUniforms(view: view, projection: projection, position: light.position, radius: light.radius)
                 withUnsafeBytes(of: &uniforms){
                     rawBuffer in
-                    encoder.setVertexBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
-                    encoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Bindings.pipelineUniforms)
+                    encoder.setVertexBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Int(BufferIndexPipeline.rawValue))
+                    encoder.setFragmentBytes(rawBuffer.baseAddress!, length: MemoryLayout<ShadowUniforms>.stride, index: Int(BufferIndexPipeline.rawValue))
                 }
                 
                 encoder.setCullMode(MTLCullMode.front)

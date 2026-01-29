@@ -8,7 +8,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "Types.h"
-#include "Bindings.h"
+
 struct VertexOut {
     float4 position [[position]];
     float3 worldPos;
@@ -36,8 +36,7 @@ vertex VertexOut outlineVertex(uint vertex_id [[vertex_id]]) {
 }
 
 fragment float4 outlineFragment(VertexOut in [[stage_in]],
-                                texture2d<float> mask [[texture(0)]],
-                                constant float4& outlineColor [[buffer(BindingsPipelineUniforms)]]) {
+                                texture2d<float> mask [[texture(TextureIndexAlbedo)]]) {
     const int radius = 2;
 
     // Convert to integer pixel coordinates
@@ -63,34 +62,10 @@ fragment float4 outlineFragment(VertexOut in [[stage_in]],
             ny = clamp(ny, 0, h - 1);
 
             if (mask.read(uint2(nx, ny)).r == 1.0) {
-                return outlineColor;
+                return float4(1, 0.5, 0.0, 1);
             }
         }
     }
     discard_fragment();
-}
-
-
-kernel void outline(texture2d<float> mask [[texture(0)]], texture2d<float, access:: read_write> colorBuffer [[texture((1))]], texture2d<float, access:: write> output [[texture(2)]], const device float4& outlineColor [[buffer(0)]], uint2 grid [[thread_position_in_grid]]){
-    int radius = 2;
-    float maskVal = mask.read(grid).r;
-    float4 colorVal = colorBuffer.read(grid);
-    
-    if(maskVal == 1.0){
-        output.write(colorVal, grid);
-        return;
-    }
-    for(int i = -radius ; i < radius ; i++){
-        for(int j = -radius; j < radius; j++){
-            uint xcoord = max(uint(0), grid.x + i);
-            uint ycoord = max(uint(0), grid.y + j);
-            maskVal = mask.read(uint2(xcoord, ycoord)).r;
-            if(maskVal == 1.0){
-                output.write(outlineColor, grid);
-                return;
-            }
-        }
-    }
-    
-    output.write(colorVal, grid);
+    return float4(0);
 }

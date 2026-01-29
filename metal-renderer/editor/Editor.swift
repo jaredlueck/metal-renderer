@@ -60,6 +60,11 @@ class Editor {
     var mouseY: Float = 0.0
         
     let spotLightTexture: MTLTexture
+    var maskTexture: MTLTexture
+    
+    var moveToolTexture: MTLTexture
+    var scaleToolTexture: MTLTexture
+    var rotateToolTexture: MTLTexture
     
     let sampler: MTLSamplerState
     
@@ -76,6 +81,8 @@ class Editor {
     var editorCamera: Camera
     
     var assetsWindow: AssetsWindow
+    
+    var depthStencilStates: DepthStencilStates
     
     init(device: MTLDevice, view: MTKView, scene: Scene, assetManager: AssetManager){
         self.descriptor = MTLRenderPassDescriptor()
@@ -131,6 +138,25 @@ class Editor {
         let textureLoader = MTKTextureLoader(device: device)
         let pointlightIconTextureUrl = Bundle.main.url(forResource: "pointlight", withExtension: "png")!
         spotLightTexture = try! textureLoader.newTexture(URL: pointlightIconTextureUrl)
+        
+        let colorTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: Int(view.bounds.width), height: Int(view.bounds.height), mipmapped: false)
+        colorTextureDescriptor.usage = [.shaderRead, .renderTarget]
+        
+        self.maskTexture = device.makeTexture(descriptor: colorTextureDescriptor)!
+
+        let moveToolTextureUrl = Bundle.main.url(forResource: "movetool", withExtension: "png")!
+        moveToolTexture = try! textureLoader.newTexture(URL: moveToolTextureUrl)
+
+        let rotateToolTextureUrl = Bundle.main.url(forResource: "rotatetool", withExtension: "png")!
+        rotateToolTexture = try! textureLoader.newTexture(URL: rotateToolTextureUrl)
+
+        let scaleToolTextureUrl = Bundle.main.url(forResource: "scaletool", withExtension: "png")!
+        scaleToolTexture = try! textureLoader.newTexture(URL: scaleToolTextureUrl)
+        
+        self.depthStencilStates = DepthStencilStates(device: device)
+        
+//        var error: NSError? = nil
+//        textureLoader.newTextures(URLs: [moveToolTextureUrl, rotateToolTextureUrl, scaleToolTextureUrl], error: &error)
     }
     
     func NDCToScreenSpace(ndc: SIMD3<Float>) -> SIMD2<Float> {
@@ -193,8 +219,8 @@ class Editor {
 
         let vertices = v1 + v2 + v3 + v4
 
-        encoder.setFragmentTexture(spotLightTexture, index: Bindings.baseTexture)
-        encoder.setFragmentSamplerState(sampler, index: Bindings.sampler)
+        encoder.setFragmentTexture(spotLightTexture, index: Int(TextureIndexAlbedo.rawValue))
+        encoder.setFragmentSamplerState(sampler, index: Int(SamplerIndexDefault.rawValue))
 
         guard let vertexBuffer = device.makeBuffer(length: MemoryLayout<Float>.stride * vertices.count) else { fatalError() }
         let vP = vertexBuffer.contents().bindMemory(to: Float.self, capacity: vertices.count)
@@ -213,75 +239,58 @@ class Editor {
         encoder.popDebugGroup()
     }
     
-    func drawLightRadius(encoder: MTLRenderCommandEncoder, position: SIMD3<Float>, radius: Float){
-        uniformColorPipeline.bind(encoder: encoder)
-        var color = SIMD3<Float>(1.0, 1.0, 1.0)
-        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD3<Float>>.stride, index: Bindings.pipelineUniforms)
-        drawRadius(encoder: encoder, origin: position, radius: radius)
+    lazy var maskPassDescriptor: MTLRenderPassDescriptor = {
+        var descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].loadAction = .clear
+        descriptor.colorAttachments[0].storeAction = .store
+        return descriptor
+    }()
+
+    lazy var editorHudPassDescriptor: MTLRenderPassDescriptor = {
+        var descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].loadAction = .load
+        descriptor.colorAttachments[0].storeAction = .store
+        descriptor.depthAttachment.storeAction = .store
+        descriptor.depthAttachment.loadAction = .load
+        return descriptor
+    }()
+    
+    func getFrameData() -> FrameData {
+        let view = editorCamera.lookAtMatrix()
+        let projection = editorCamera.projectionMatrix
+        let inverseView = view.inverse
+        let inverseProjection = projection.inverse
+        let viewportSize = editorCamera.viewportSize
+        
+        let frameData = FrameData(view: view, projection: projection, inverseView: inverseView, inverseProjection: inverseProjection, cameraPosition: SIMD4<Float>(editorCamera.position, 1.0), viewportSize: viewportSize)
+        return frameData
     }
 
-    func renderHUD(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources) {
-        self.hudRenderPassDescriptor.colorAttachments[0].texture = sharedResources.outlineMask
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.hudRenderPassDescriptor) else {
+    func encode(commandBuffer: MTLCommandBuffer) {
+        let frameData = getFrameData()
+        
+        let maskPass = maskPassDescriptor
+        maskPass.colorAttachments[0].texture = maskTexture
+                
+        editorHudPassDescriptor.colorAttachments[0].texture = self.view.currentDrawable?.texture
+        editorHudPassDescriptor.depthAttachment.texture = self.view.depthStencilTexture
+        
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
             fatalError("Failed to create render command encoder")
         }
-        withUnsafeBytes(of: sharedResources.makeFrameUniforms()) { rawBuffer in
-            encoder.setVertexBytes(rawBuffer.baseAddress!,
-                                           length: MemoryLayout<FrameUniforms>.stride,
-                                     index: Bindings.frameUniforms)
-        }
         
-        if let selected = selectedEntity {
-            if selected.nodeType == .model {
-                self.maskPipeline.bind(encoder: encoder)
-                
-                let model = assetManager.getAssetById(selected.assetId!)!
-                
-                let instance = InstancedRenderable(device: device, model:model)
-                instance.addInstance(transform: selected.transform)
-                instance.draw(renderEncoder: encoder, instanceId: nil)
-            }
-        }
-        
-        encoder.endEncoding()
-    }
-
-    func renderUI(commandBuffer: MTLCommandBuffer, sharedResources: inout SharedResources){
-        self.descriptor.colorAttachments[0].texture = sharedResources.colorBuffer
-        self.descriptor.depthAttachment.texture = sharedResources.depthBuffer
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: self.descriptor) else {
-            fatalError("Failed to create render command encoder")
-        }
-        encoder.label = "ImGui UI render encoder"
-        
-        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
-        
-        withUnsafeBytes(of: sharedResources.makeFrameUniforms()) { rawBuffer in
-            encoder.setVertexBytes(rawBuffer.baseAddress!,
-                                           length: MemoryLayout<FrameUniforms>.stride,
-                                     index: Bindings.frameUniforms)
-        }
-                
-        encoder.setFragmentTexture(sharedResources.outlineMask, index: 0)
-
-        var outlineColor = SIMD4<Float>(1, 0.5, 0.0, 1)
-        encoder.setFragmentBytes(&outlineColor, length: MemoryLayout<SIMD4<Float>>.stride, index: Bindings.pipelineUniforms)
-        
-        self.outlinePipeline.bind(encoder: encoder)
-        
-        encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
-        
-        encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
-        
-        var gridColor = SIMD4<Float>(0.5, 0.5, 0.5, 0.5)
-        encoder.setFragmentBytes(&gridColor, length: MemoryLayout<SIMD4<Float>>.stride, index: Bindings.pipelineUniforms)
+        encoder.setDepthStencilState(depthStencilStates.forwardPass)
         
         self.gridPipeline.bind(encoder: encoder)
         
+        withUnsafeBytes(of: frameData) { rawBuffer in
+            encoder.setVertexBytes(rawBuffer.baseAddress!,
+                                       length: MemoryLayout<FrameData>.stride,
+                                       index: Int(BufferIndexFrameData.rawValue))
+        }
+        
         encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
         
-        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
-
         let sceneLights = scene.getLights()
 
         for light in sceneLights {
@@ -290,12 +299,67 @@ class Editor {
         
         if let node = selectedEntity,
            let radius = node.lightData?.radius {
-            drawLightRadius(encoder: encoder, position: node.transform.position, radius: radius)
+            drawRadius(encoder: encoder, origin: node.transform.position, radius: radius)
         }
-
-        encoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
-        imGui(view: view, commandBuffer: commandBuffer, encoder: encoder, sharedResources: &sharedResources)
+        
         encoder.endEncoding()
+        
+        if let selected = selectedEntity {
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
+                fatalError("Failed to create render command encoder")
+            }
+            withUnsafeBytes(of: frameData) { rawBuffer in
+                encoder.setVertexBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameData>.stride,
+                                           index: Int(BufferIndexFrameData.rawValue))
+            }
+            self.uniformColorPipeline.bind(encoder: encoder)
+            transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
+            encoder.endEncoding()
+            if selected.nodeType == .model {
+                guard let maskEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: maskPassDescriptor) else {
+                    fatalError("Failed to create render command encoder")
+                }
+                maskEncoder.label = "Mask pass render encoder"
+                
+                withUnsafeBytes(of: frameData) { rawBuffer in
+                    maskEncoder.setVertexBytes(rawBuffer.baseAddress!,
+                                               length: MemoryLayout<FrameData>.stride,
+                                               index: Int(BufferIndexFrameData.rawValue))
+                }
+                
+                maskPipeline.bind(encoder: maskEncoder)
+                let model = assetManager.getAssetById(selected.assetId!)!
+                
+                let instance = InstancedRenderable(device: device, model:model)
+                instance.addInstance(transform: selected.transform)
+                instance.draw(renderEncoder: maskEncoder, instanceId: nil)
+                maskEncoder.endEncoding()
+                
+                guard let outlineEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
+                    fatalError("Failed to create render command encoder")
+                }
+                outlineEncoder.label = "Outline pass render encoder"
+                
+                outlinePipeline.bind(encoder: outlineEncoder)
+                
+                withUnsafeBytes(of: frameData) { rawBuffer in
+                    outlineEncoder.setVertexBytes(rawBuffer.baseAddress!,
+                                               length: MemoryLayout<FrameData>.stride,
+                                               index: Int(BufferIndexFrameData.rawValue))
+                }
+                
+                outlineEncoder.setFragmentTexture(maskTexture, index: Int(TextureIndexAlbedo.rawValue))
+
+                outlineEncoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
+                
+                outlineEncoder.endEncoding()
+            }
+            
+            let imGuiRenderPassDescriptor = MTLRenderPassDescriptor()
+            imGuiRenderPassDescriptor.colorAttachments[0].texture = view.currentDrawable!.texture
+//            imGui(view: view, commandBuffer: commandBuffer, encoder: encoder)
+        }
     }
     
     @objc func saveScene(_ sender: Any?) {
@@ -312,7 +376,7 @@ class Editor {
         assetManager.writeAssetMapToFile()
     }
     
-    func imGui(view: MTKView, commandBuffer: MTLCommandBuffer, encoder: MTLRenderCommandEncoder, sharedResources: inout SharedResources){
+    func imGui(view: MTKView, commandBuffer: MTLCommandBuffer, encoder: MTLRenderCommandEncoder){
         let io = ImGuiGetIO()!
         io.pointee.IniFilename = nil
         let viewWidth = Float(view.bounds.size.width)
@@ -334,15 +398,13 @@ class Editor {
         
         assetsWindow.encode()
         
-        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
+        encoder.setDepthStencilState(depthStencilStates.shadowGeneration)
         
         if let selected = selectedEntity {
             self.uniformColorPipeline.bind(encoder: encoder)
             transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
         }
-        
-        encoder.setDepthStencilState(sharedResources.depthStencilStateDisabled)
-        
+                
         ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), 1 << 1, ImVec2(x: 1, y: 0))
         ImGuiBegin("Scene Hierarchy", &show_demo_window, 0)
         ImGuiEnd()
@@ -389,6 +451,44 @@ class Editor {
             ImGuiEndDragDropTarget()
         }
         ImGuiEnd()
+        var show = true
+        ImGuiBegin("gizmos", &show, Int32(ImGuiWindowFlags_NoTitleBar.rawValue))
+        withUnsafePointer(to: &moveToolTexture) { ptr in
+            let raw = UnsafeMutableRawPointer(mutating: ptr)
+            if ImGuiImageButton("Move Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
+                transformGizmo.setTransformMode(.translate)
+            }
+            if ImGuiIsItemHovered(0) {
+                ImGuiBeginTooltip()
+                ImGuiTextV("Move Tool")
+                ImGuiEndTooltip()
+            }
+        }
+        
+        withUnsafePointer(to: &rotateToolTexture) { ptr in
+            let raw = UnsafeMutableRawPointer(mutating: ptr)
+            if ImGuiImageButton("Rotate Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
+                transformMode = .rotate
+            }
+            if ImGuiIsItemHovered(0) {
+                ImGuiBeginTooltip()
+                ImGuiTextV("Rotate Tool")
+                ImGuiEndTooltip()
+            }
+        }
+
+        withUnsafePointer(to: &scaleToolTexture) { ptr in
+            let raw = UnsafeMutableRawPointer(mutating: ptr)
+            if ImGuiImageButton("Scale Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
+                transformGizmo.setTransformMode(.scale)
+            }
+            if ImGuiIsItemHovered(0) {
+                ImGuiBeginTooltip()
+                ImGuiTextV("Scale Tool")
+                ImGuiEndTooltip()
+            }
+        }
+        ImGuiEnd()
         ImGuiRender()
         let drawData = ImGuiGetDrawData()!
 
@@ -409,24 +509,24 @@ class Editor {
         xzCircle.append(xzCircle[0])
         
         var transform = matrix_identity_float4x4
-        encoder.setVertexBytes(&transform, length: MemoryLayout<simd_float4x4>.stride , index: Bindings.instanceData)
+        encoder.setVertexBytes(&transform, length: MemoryLayout<simd_float4x4>.stride , index: Int(BufferIndexInstanceData.rawValue))
         
         let xyBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * xyCircle.count)
         let xyPtr = xyBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: xyCircle.count)
         xyPtr?.update(from: xyCircle, count: xyCircle.count)
-        encoder.setVertexBuffer(xyBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.setVertexBuffer(xyBuffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
         encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: xyCircle.count)
 
         let yzBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * yzCircle.count)
         let yzPtr = yzBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: yzCircle.count)
         yzPtr?.update(from: yzCircle, count: yzCircle.count)
-        encoder.setVertexBuffer(yzBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.setVertexBuffer(yzBuffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
         encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: yzCircle.count)
         
         let xzBuffer = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * xzCircle.count)
         let xzPtr = xzBuffer?.contents().bindMemory(to: SIMD3<Float>.self, capacity: xzCircle.count)
         xzPtr?.update(from: xzCircle, count: xzCircle.count)
-        encoder.setVertexBuffer(xzBuffer, offset: 0, index: Bindings.vertexBuffer)
+        encoder.setVertexBuffer(xzBuffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
         encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: xzCircle.count)
     }
     
@@ -553,6 +653,13 @@ class Editor {
             }
         }
         self.selectedEntity = selected
+    }
+    
+    func updateTextures(size: CGSize){
+        let colorTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: Int(size.width), height: Int(size.height), mipmapped: false)
+        colorTextureDescriptor.usage = [.shaderRead, .renderTarget]
+        
+        self.maskTexture = device.makeTexture(descriptor: colorTextureDescriptor)!
     }
     
     func updateCameraTransform(deltaX: Float, deltaY: Float){

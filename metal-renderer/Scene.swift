@@ -120,7 +120,7 @@ public class Scene: Codable {
         }
         return SceneData(renderables: renderableMap, pointLights: lights)
     }
-    
+
     public func getNodes() -> [Node] {
         var nodes: [Node] = []
         for node in rootNode.children {

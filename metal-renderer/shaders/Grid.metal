@@ -6,19 +6,14 @@
 //
 #include <metal_stdlib>
 #include "Types.h"
-#include "Bindings.h"
 using namespace metal;
-
-struct GridUniforms {
-    float4 baseColor;
-};
 
 struct VSOut {
     float4 position [[position]];
     float3 worldPos;
 };
 
-vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]){
+vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameData& uniforms [[buffer(BufferIndexFrameData)]]){
     float4 cameraPos = uniforms.cameraPosition;
     float camX = cameraPos.x;
     float camZ = cameraPos.z;
@@ -41,7 +36,7 @@ vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameUniforms& uniforms
     return o;
 }
 
-fragment float4 gridFragment(VSOut in [[stage_in]], constant float4& baseColor [[buffer(BindingsPipelineUniforms)]]){
+fragment float4 gridFragment(VSOut in [[stage_in]]){
     float3 pos = in.worldPos;
     float eps = 0.015;
 
@@ -55,8 +50,9 @@ fragment float4 gridFragment(VSOut in [[stage_in]], constant float4& baseColor [
     }
     bool onGridXZPlane = fract(pos.x) < eps || fract(pos.z) < eps;
     if (onGridXZPlane) {
-        return baseColor;
+        return float4(1.0, 1.0, 1.0, 1.0);
     }
-    discard_fragment(); // No color or depth written
+    discard_fragment();
+    return float4(0);
 }
 

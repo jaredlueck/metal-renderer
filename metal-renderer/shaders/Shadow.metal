@@ -7,7 +7,6 @@
 
 #include <metal_stdlib>
 #include "Types.h"
-#include "Bindings.h"
 using namespace metal;
 
 struct CubeShadowUniforms {
@@ -29,8 +28,8 @@ struct VertexOut {
 vertex VertexOut cubeShadowMapVertex(uint vertex_id [[vertex_id]],
                                VertexIn vertexData [[stage_in]],
                                uint instance_id [[instance_id]],
-                               constant CubeShadowUniforms& uniforms [[buffer(BindingsPipelineUniforms)]],
-                               constant InstanceData* instanceData [[buffer(BindingsInstanceData)]]) {
+                               constant CubeShadowUniforms& uniforms [[buffer(BufferIndexPipeline)]],
+                               constant InstanceData* instanceData [[buffer(BufferIndexInstanceData)]]) {
     InstanceData instance = instanceData[instance_id];
     VertexOut o;
     float4x4 model = instance.model;
@@ -42,7 +41,7 @@ vertex VertexOut cubeShadowMapVertex(uint vertex_id [[vertex_id]],
 }
 
 fragment float cubeShadowMapFragment(VertexOut in [[stage_in]],
-                                  constant CubeShadowUniforms& uniforms [[buffer(BindingsPipelineUniforms)]]) {
+                                  constant CubeShadowUniforms& uniforms [[buffer(BufferIndexPipeline)]]) {
     float dist = distance(in.worldPos, uniforms.lightPos.xyz);
     return dist / uniforms.radius;
 }

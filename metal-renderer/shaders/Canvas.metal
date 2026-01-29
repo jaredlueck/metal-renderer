@@ -7,7 +7,6 @@
 
 #include <metal_stdlib>
 #include "Types.h"
-#include "Bindings.h"
 using namespace metal;
 
 struct VertexIn {
@@ -25,8 +24,8 @@ struct VertexOut {
 
 vertex VertexOut canvasVertex(uint vertex_id [[vertex_id]],
                              VertexIn vertexData [[stage_in]],
-                             constant float4x4* instanceData [[buffer(BindingsInstanceData)]],
-                             constant FrameUniforms& uniforms [[buffer(BindingsFrameUniforms)]]) {
+                             constant float4x4* instanceData [[buffer(BufferIndexInstanceData)]],
+                             constant FrameData& uniforms [[buffer(BufferIndexFrameData)]]) {
     
     VertexOut o;
     float4 localPos = float4(vertexData.position, 1.0);
@@ -37,8 +36,8 @@ vertex VertexOut canvasVertex(uint vertex_id [[vertex_id]],
 }
 
 fragment float4 canvasFragment(VertexOut in [[stage_in]],
-                               texture2d<float> texture [[texture(BindingsBaseTexture)]],
-                               sampler s [[sampler(BindingsSampler)]]){
+                               texture2d<float> texture [[texture(TextureIndexAlbedo)]],
+                               sampler s [[sampler(SamplerIndexDefault)]]){
     float4 color = texture.sample(s, in.texCoord);
     if( color.x <= 0.05 && color.y <= 0.05 && color.z <= 0.05 ){
         discard_fragment();
@@ -56,7 +55,7 @@ struct CircleUniforms {
 };
 
 fragment float4 circleFragment(VertexOut in [[stage_in]],
-                               constant CircleUniforms& uniforms [[buffer(BindingsPipelineUniforms)]]){
+                               constant CircleUniforms& uniforms [[buffer(BufferIndexPipeline)]]){
     float2 pixel = in.position.xy;
     float dist = distance(uniforms.center, pixel);
     if(abs(dist - uniforms.radius) < uniforms.thickness){

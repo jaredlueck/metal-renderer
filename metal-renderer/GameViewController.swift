@@ -51,7 +51,7 @@ class GameViewController: NSViewController {
         let assetManager = AssetManager(device: device, assetFilePath: "assets.json")
         self.editor = Editor(device: device, view: self.mtkView, scene: scene, assetManager: assetManager)
         
-        guard let newRenderer = Renderer(metalKitView: mtkView, scene: scene, editor: self.editor, assetManager: assetManager) else {
+        guard let newRenderer = Renderer(metalKitView: self.mtkView, scene: scene, editor: self.editor, assetManager: assetManager) else {
             print("Renderer cannot be initialized")
             return
         }

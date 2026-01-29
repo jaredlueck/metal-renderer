@@ -174,18 +174,18 @@ public struct ArrowGizmo {
         guard let vbuf = device.makeBuffer(length: MemoryLayout<SIMD3<Float>>.stride * verts.count, options: .storageModeShared) else { return }
         let vptr = vbuf.contents().bindMemory(to: SIMD3<Float>.self, capacity: verts.count)
         for i in 0..<verts.count { vptr[i] = verts[i] }
-        encoder.setVertexBuffer(vbuf, offset: 0, index: Bindings.vertexBuffer)
+        encoder.setVertexBuffer(vbuf, offset: 0, index: Int(BufferIndexVertex.rawValue))
  
         guard let instanceBuffer = device.makeBuffer(length: MemoryLayout<matrix_float4x4>.stride, options: .storageModeShared) else { return }
         let iptr = instanceBuffer.contents().bindMemory(to: matrix_float4x4.self, capacity: 1)
         iptr[0] = transform
-        encoder.setVertexBuffer(instanceBuffer, offset: 0, index: Bindings.instanceData)
+        encoder.setVertexBuffer(instanceBuffer, offset: 0, index: Int(BufferIndexInstanceData.rawValue))
         
         guard let indexBuffer = device.makeBuffer(length: MemoryLayout<UInt16>.stride * indices.count, options: .storageModeShared) else { return }
         let indexPtr = indexBuffer.contents().bindMemory(to: UInt16.self, capacity: indices.count)
         for i in 0..<indices.count { indexPtr[i] = indices[i] }
 
-        encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD3<Float>>.stride, index: Bindings.pipelineUniforms)
+        encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD3<Float>>.stride, index: Int(BufferIndexPipeline.rawValue))
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: indices.count, indexType: MTLIndexType.uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
         encoder.popDebugGroup()
     }
