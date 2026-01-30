@@ -1,6 +1,6 @@
 //
 //  Types.h
-//  metal-swift-new
+//  metal-renderer
 //
 //  Created by Jared Lueck on 2026-01-04.
 //

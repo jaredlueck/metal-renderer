@@ -48,15 +48,13 @@ class InstancedRenderable {
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
-
-
         for i in 0..<model.asset.count {
             guard let mdlMesh = model.asset.object(at: i) as? MDLMesh else { continue }
-
+            
             if let mtkBuffer = mdlMesh.vertexBuffers.first as? MTKMeshBuffer {
                 renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
             }
-
+            
             if let mdlSubmeshes = mdlMesh.submeshes as? [MDLSubmesh] {
                 for mdlSubmesh in mdlSubmeshes {
                     let indexCount = mdlSubmesh.indexCount
@@ -68,7 +66,7 @@ class InstancedRenderable {
                     
                     let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: baseColor) }
                     let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
-
+                    
                     instanceData.withUnsafeBytes { rawBuffer in
                         renderEncoder.setVertexBytes(
                             rawBuffer.baseAddress!,
@@ -90,7 +88,7 @@ class InstancedRenderable {
                     default:
                         indexType = .uint32
                     }
-
+                    
                     if let mtkIndexBuffer = mdlSubmesh.indexBuffer as? MTKMeshBuffer {
                         renderEncoder.drawIndexedPrimitives(
                             type: .triangle,
@@ -104,7 +102,6 @@ class InstancedRenderable {
                 }
             }
         }
-        renderEncoder.setFragmentSamplerState(sampler, index: 0)
     }
 }
 

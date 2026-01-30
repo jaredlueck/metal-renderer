@@ -12,18 +12,10 @@ import MetalKit
 import simd
 import ImGui
 
-struct FrameUniforms {
-    var view: simd_float4x4 =  matrix_identity_float4x4
-    var projection: simd_float4x4 =  matrix_identity_float4x4
-    var inverseView: simd_float4x4 =  matrix_identity_float4x4
-    var inverseProjection: simd_float4x4  = matrix_identity_float4x4
-    var cameraPos: simd_float4 = SIMD4<Float>(0, -1, 5.1, 1)
-    var viewportSize: simd_float2 = .init(1, 1)
-}
-
-public struct PointLight {
+struct ShadowUniforms {
+    var view: simd_float4x4
+    var projection: simd_float4x4
     var position: simd_float4
-    var color: simd_float4
     var radius: simd_float1
 }
 
@@ -57,10 +49,6 @@ class Renderer: NSObject, MTKViewDelegate {
     let assetManager: AssetManager
     let scene: Scene
     
-    var sharedResources: SharedResources
-    let shadowPass: ShadowPass
-    let maskPass: MaskPass
-    let colorPass: ColorPass
     let editor: Editor
     let library: MTLLibrary
     
@@ -68,6 +56,7 @@ class Renderer: NSObject, MTKViewDelegate {
     let depthPixelFormat: MTLPixelFormat
     
     let shadowMap: MTLTexture
+    var depthStencilStates: DepthStencilStates
     
     lazy var forwardPassDescriptor: MTLRenderPassDescriptor = {
         let descriptor = MTLRenderPassDescriptor()
@@ -94,31 +83,18 @@ class Renderer: NSObject, MTKViewDelegate {
 
         metalKitView.colorPixelFormat = MTLPixelFormat.bgra8Unorm_srgb
         metalKitView.depthStencilPixelFormat = MTLPixelFormat.depth32Float
-
-        let eye = SIMD3<Float>(0, 1, 5)
-        let viewMatrix = matrix_lookAt(eye: eye, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
-
-        sharedResources = SharedResources( device: device, view: self.view)
-        sharedResources.viewMatrix = viewMatrix
-        sharedResources.cameraPos = SIMD4<Float>(eye, 1.0)
         
         let width = Int(view.drawableSize.width)
         let height = Int(view.drawableSize.height)
 
         self.scene = scene
         self.assetManager = assetManager
+        self.assetManager.loadAssets()
         
-        colorPass = ColorPass(device: device)
-        colorPass.setColorAttachment(colorTexture: sharedResources.colorBuffer)
-        colorPass.setDepthAttachment(depthTexture: sharedResources.depthBuffer)
-        maskPass = MaskPass(device: device)
-        shadowPass = ShadowPass(device: device)
         self.editor = editor
         colorPixelFormat = view.colorPixelFormat
         depthPixelFormat = view.depthStencilPixelFormat
         
- 
-        self.assetManager.loadAssets()
         self.library = try! device.makeDefaultLibrary(bundle: Bundle.main)
         
         let shadowMapDesc = MTLTextureDescriptor()
@@ -132,11 +108,8 @@ class Renderer: NSObject, MTKViewDelegate {
         shadowMapDesc.usage = [.renderTarget, .shaderRead]
         
         shadowMap = device.makeTexture(descriptor: shadowMapDesc)!
+        self.depthStencilStates = DepthStencilStates(device: device)
         super.init()
-        
-        _ = ImGuiCreateContext(nil)
-        ImGuiStyleColorsDark(nil)
-        ImGui_ImplMetal_Init(device)
     }
     
     func draw(in view: MTKView) {
@@ -280,12 +253,9 @@ class Renderer: NSObject, MTKViewDelegate {
                                                length: MemoryLayout<FrameData>.stride,
                                        index: Int(BufferIndexFrameData.rawValue))
             }
-            
-            renderEncoder.setFragmentSamplerState(sharedResources.sampler, index: Int(SamplerIndexDefault.rawValue))
-            renderEncoder.setFragmentSamplerState(sharedResources.shadowSampler, index: Int(SamplerIndexCube.rawValue))
                     
             renderEncoder.pushDebugGroup("render meshes")
-            renderEncoder.setDepthStencilState(sharedResources.depthStencilStateEnabled)
+            renderEncoder.setDepthStencilState(depthStencilStates.forwardPass)
             
             let lightBuffer = lights.withUnsafeBufferPointer { bufferPtr in
                  return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * max(lights.count, 1))
@@ -339,26 +309,10 @@ class Renderer: NSObject, MTKViewDelegate {
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        let aspect = Float(size.width) / Float(size.height)
-        
         let width = Int(size.width)
         let height = Int(size.height)
-        self.sharedResources.projectionMatrix = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(65), aspectRatio:aspect, nearZ: 0.01, farZ: 100.0)
         self.editor.updateTextures(size: size)
         self.editor.editorCamera.updateProjection(drawableSize: size)
         editor.editorCamera.viewportSize = SIMD2<Float>(Float(width), Float(height))
-        
-        sharedResources.depthTextureDescriptor.height = height
-        sharedResources.depthTextureDescriptor.width = width
-        sharedResources.depthBuffer = device.makeTexture(descriptor: sharedResources.depthTextureDescriptor)!
-                
-        sharedResources.maskTextureDescriptor.height = height
-        sharedResources.maskTextureDescriptor.width = width
-        device.makeTexture(descriptor: sharedResources.maskTextureDescriptor)
-        sharedResources.outlineMask = device.makeTexture(descriptor: sharedResources.maskTextureDescriptor)
-        
-        sharedResources.colorTextureDescriptor.height = height
-        sharedResources.colorTextureDescriptor.width = width
-        sharedResources.colorBuffer = device.makeTexture(descriptor: sharedResources.colorTextureDescriptor)!
     }
 }

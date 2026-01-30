@@ -65,9 +65,7 @@ class Editor {
     var moveToolTexture: MTLTexture
     var scaleToolTexture: MTLTexture
     var rotateToolTexture: MTLTexture
-    
-    let sampler: MTLSamplerState
-    
+        
     var hoveringSceneWindow = false
     
     var xAxisSelected = false
@@ -76,11 +74,10 @@ class Editor {
     
     var dragging = false
     
-    let transformGizmo: TransformGizmo
-    
     var editorCamera: Camera
-    
+    let transformGizmo: TransformGizmo
     var assetsWindow: AssetsWindow
+    let transformPanel: TransformPanel
     
     var depthStencilStates: DepthStencilStates
     
@@ -114,26 +111,20 @@ class Editor {
         self.circlePipeline = RenderPipeline(device: device, program: self.circleShader, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
         self.device = device
         
+        self.transformGizmo = TransformGizmo(device: device)
+        
         assetsWindow = AssetsWindow(scene: scene)
         assetsWindow.loadAssetsFolder()
         
+        transformPanel = TransformPanel(device: device)
+
         self.view = view
         self.scene = scene
         self.assetManager = assetManager
         let size = view.bounds.size
         let width = Int(size.width)
         let height = Int(size.height)
-
-        let samplerDescriptor = MTLSamplerDescriptor()
-        samplerDescriptor.minFilter = .linear
-        samplerDescriptor.magFilter = .linear
-        samplerDescriptor.mipFilter = .linear
-        guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
-            fatalError("Failed to create sampler state")
-        }
-        self.sampler = sampler
         
-        self.transformGizmo = TransformGizmo(device: device)
         self.editorCamera = Camera(position: SIMD3<Float>(0, 1, 5), viewportSize: SIMD2<Float>(Float(width), Float(height)))
         let textureLoader = MTKTextureLoader(device: device)
         let pointlightIconTextureUrl = Bundle.main.url(forResource: "pointlight", withExtension: "png")!
@@ -155,8 +146,12 @@ class Editor {
         
         self.depthStencilStates = DepthStencilStates(device: device)
         
-//        var error: NSError? = nil
-//        textureLoader.newTextures(URLs: [moveToolTextureUrl, rotateToolTextureUrl, scaleToolTextureUrl], error: &error)
+        transformPanel.onMovePressed = { self.transformGizmo.transformMode = .translate }
+        transformPanel.onScalePressed = { self.transformGizmo.transformMode = .scale }
+        
+        _ = ImGuiCreateContext(nil)
+        ImGuiStyleColorsDark(nil)
+        ImGui_ImplMetal_Init(device) 
     }
     
     func NDCToScreenSpace(ndc: SIMD3<Float>) -> SIMD2<Float> {
@@ -220,7 +215,6 @@ class Editor {
         let vertices = v1 + v2 + v3 + v4
 
         encoder.setFragmentTexture(spotLightTexture, index: Int(TextureIndexAlbedo.rawValue))
-        encoder.setFragmentSamplerState(sampler, index: Int(SamplerIndexDefault.rawValue))
 
         guard let vertexBuffer = device.makeBuffer(length: MemoryLayout<Float>.stride * vertices.count) else { fatalError() }
         let vP = vertexBuffer.contents().bindMemory(to: Float.self, capacity: vertices.count)
@@ -308,12 +302,12 @@ class Editor {
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
                 fatalError("Failed to create render command encoder")
             }
+            self.uniformColorPipeline.bind(encoder: encoder)
             withUnsafeBytes(of: frameData) { rawBuffer in
                 encoder.setVertexBytes(rawBuffer.baseAddress!,
                                            length: MemoryLayout<FrameData>.stride,
                                            index: Int(BufferIndexFrameData.rawValue))
             }
-            self.uniformColorPipeline.bind(encoder: encoder)
             transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
             encoder.endEncoding()
             if selected.nodeType == .model {
@@ -336,6 +330,8 @@ class Editor {
                 instance.draw(renderEncoder: maskEncoder, instanceId: nil)
                 maskEncoder.endEncoding()
                 
+//                encodeStage(using: <#T##MTLRenderCommandEncoder#>, label: <#T##String#>, <#T##() -> Void#>)
+//                
                 guard let outlineEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
                     fatalError("Failed to create render command encoder")
                 }
@@ -355,11 +351,8 @@ class Editor {
                 
                 outlineEncoder.endEncoding()
             }
-            
-            let imGuiRenderPassDescriptor = MTLRenderPassDescriptor()
-            imGuiRenderPassDescriptor.colorAttachments[0].texture = view.currentDrawable!.texture
-//            imGui(view: view, commandBuffer: commandBuffer, encoder: encoder)
         }
+        imGui(view: view, commandBuffer: commandBuffer)
     }
     
     @objc func saveScene(_ sender: Any?) {
@@ -376,7 +369,14 @@ class Editor {
         assetManager.writeAssetMapToFile()
     }
     
-    func imGui(view: MTKView, commandBuffer: MTLCommandBuffer, encoder: MTLRenderCommandEncoder){
+    func imGui(view: MTKView, commandBuffer: MTLCommandBuffer){
+        let imGuiRenderPassDescriptor = MTLRenderPassDescriptor()
+        imGuiRenderPassDescriptor.colorAttachments[0].texture = view.currentDrawable!.texture
+        imGuiRenderPassDescriptor.colorAttachments[0].loadAction = .load
+        imGuiRenderPassDescriptor.depthAttachment.loadAction = .load
+        
+        imGuiRenderPassDescriptor.depthAttachment.texture = view.depthStencilTexture
+        let imGuiEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: imGuiRenderPassDescriptor)!
         let io = ImGuiGetIO()!
         io.pointee.IniFilename = nil
         let viewWidth = Float(view.bounds.size.width)
@@ -390,27 +390,21 @@ class Editor {
         io.pointee.DisplayFramebufferScale = ImVec2(x: frameBufferScale, y: frameBufferScale)
         io.pointee.DeltaTime = 1.0 / Float(view.preferredFramesPerSecond)
 
-        ImGui_ImplMetal_NewFrame(self.descriptor)
+        ImGui_ImplMetal_NewFrame(imGuiRenderPassDescriptor)
         ImGui_ImplOSX_NewFrame(view)
         ImGuiNewFrame()
-        ImGuiSetNextWindowPos(ImVec2(x: 10, y: 10), 1 << 1, ImVec2(x: 0, y: 0))
-        var show_demo_window = true
+        transformPanel.encode()
         
+        var show_demo_window = true
+       
         assetsWindow.encode()
         
-        encoder.setDepthStencilState(depthStencilStates.shadowGeneration)
-        
-        if let selected = selectedEntity {
-            self.uniformColorPipeline.bind(encoder: encoder)
-            transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
-        }
+        imGuiEncoder.setDepthStencilState(depthStencilStates.shadowGeneration)
                 
-        ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), 1 << 1, ImVec2(x: 1, y: 0))
+        ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), ImGuiCond(ImGuiCond_Always.rawValue), ImVec2(x: 1, y: 0))
+        ImGuiSetNextWindowSize(ImVec2(x: 150, y: 100), 0)
         ImGuiBegin("Scene Hierarchy", &show_demo_window, 0)
         ImGuiEnd()
-
-        ImGuiSetNextWindowPos(ImVec2(x: 0, y: 0), 1 << 1, ImVec2(x: 0, y: 0))
-        ImGuiSetNextWindowSize(ImVec2(x: viewWidth, y: viewHeight), 0)
         
         let sceneFlags = ImGuiWindowFlags(
             ImGuiWindowFlags_NoTitleBar.rawValue |
@@ -444,55 +438,17 @@ class Editor {
                 let rawPtr = payload.pointee.Data
                 let size = Int(payload.pointee.DataSize)
                 
-                let buffer = UnsafeRawBufferPointer(start: rawPtr, count: size)
-
                 scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
             }
             ImGuiEndDragDropTarget()
         }
         ImGuiEnd()
-        var show = true
-        ImGuiBegin("gizmos", &show, Int32(ImGuiWindowFlags_NoTitleBar.rawValue))
-        withUnsafePointer(to: &moveToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Move Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformGizmo.setTransformMode(.translate)
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Move Tool")
-                ImGuiEndTooltip()
-            }
-        }
-        
-        withUnsafePointer(to: &rotateToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Rotate Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformMode = .rotate
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Rotate Tool")
-                ImGuiEndTooltip()
-            }
-        }
 
-        withUnsafePointer(to: &scaleToolTexture) { ptr in
-            let raw = UnsafeMutableRawPointer(mutating: ptr)
-            if ImGuiImageButton("Scale Tool", raw, ImVec2(x: 15, y: 15), ImVec2(x: 0.1, y: 0.1), ImVec2(x: 0.9, y: 0.9), ImVec4(x: 0, y: 0, z: 0, w: 0), ImVec4(x: 1, y: 1, z: 1, w: 1)) {
-                transformGizmo.setTransformMode(.scale)
-            }
-            if ImGuiIsItemHovered(0) {
-                ImGuiBeginTooltip()
-                ImGuiTextV("Scale Tool")
-                ImGuiEndTooltip()
-            }
-        }
-        ImGuiEnd()
         ImGuiRender()
         let drawData = ImGuiGetDrawData()!
 
-        ImGui_ImplMetal_RenderDrawData(drawData.pointee, commandBuffer, encoder)
+        ImGui_ImplMetal_RenderDrawData(drawData.pointee, commandBuffer, imGuiEncoder)
+        imGuiEncoder.endEncoding()
     }
     
     func drawRadius(encoder: MTLRenderCommandEncoder, origin: SIMD3<Float>, radius: Float){
@@ -600,7 +556,7 @@ class Editor {
         let r = ray.origin
         
         // parametric equation of line p(t) = r + dt
-        let minDist = Float.greatestFiniteMagnitude
+        var minDist = Float.greatestFiniteMagnitude
         var selected: Node? = nil
         
         let nodes = scene.getNodes()
@@ -649,6 +605,7 @@ class Editor {
                 // ray intersects
                 if tclose < minDist {
                     selected = node
+                    minDist = tclose
                 }
             }
         }

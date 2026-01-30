@@ -20,6 +20,7 @@ public class AssetsWindow {
     }
     
     func encode(){
+        ImGuiSetNextWindowPos(ImVec2(x: 10, y: 10), 1 << 1, ImVec2(x: 0, y: 0))
         ImGuiBegin("Meshes", &windowVisible, 0)
         
         var selectedIndex: Int32 = 0

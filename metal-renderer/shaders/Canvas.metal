@@ -36,8 +36,10 @@ vertex VertexOut canvasVertex(uint vertex_id [[vertex_id]],
 }
 
 fragment float4 canvasFragment(VertexOut in [[stage_in]],
-                               texture2d<float> texture [[texture(TextureIndexAlbedo)]],
-                               sampler s [[sampler(SamplerIndexDefault)]]){
+                               texture2d<float> texture [[texture(TextureIndexAlbedo)]]){
+    constexpr sampler s (mip_filter::linear,
+                                     mag_filter::linear,
+                                     min_filter::linear);
     float4 color = texture.sample(s, in.texCoord);
     if( color.x <= 0.05 && color.y <= 0.05 && color.z <= 0.05 ){
         discard_fragment();
