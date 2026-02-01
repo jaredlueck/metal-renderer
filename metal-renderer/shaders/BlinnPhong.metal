@@ -43,9 +43,9 @@ vertex VertexOut phongVertex(uint vertex_id [[vertex_id]],
     float4x4 mv = uniforms.view * model;
     float4x4 mvp = uniforms.projection * uniforms.view * model;
     // Build the upper-left 3x3 of the model-view matrix
-    float3x3 mv3x3 = float3x3(mv[0].xyz, mv[1].xyz, mv[2].xyz);
+    float3x3 v3x3 = float3x3(uniforms.view[0].xyz, uniforms.view[1].xyz, uniforms.view[2].xyz);
     // TODO: use inverse transpose to transform normals
-    float3x3 normalMatrix = mv3x3;
+    float3x3 normalMatrix = v3x3 * instance.normalMatrix;
     o.position = mvp * localPos;
     o.viewPos = (mv * localPos).xyz;
     o.texCoord = vertexData.textureCoordinate;
