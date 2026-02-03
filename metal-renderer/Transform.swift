@@ -28,18 +28,7 @@ public class Transform: Codable {
     }
 
     func getNormalMatrix() -> simd_float3x3 {
-        let scale = matrix_float4x4(columns: (
-            SIMD4<Float>(scale.x, 0.0, 0.0, 0.0),
-            SIMD4<Float>(0.0, scale.y, 0.0, 0.0),
-            SIMD4<Float>(0.0, 0.0, scale.z, 0.0),
-            SIMD4<Float>(0.0, 0.0, 0.0, 1.0)
-        ))
-        let normalMatrix4x4 = simd_transpose(simd_inverse(scale))
-        let normalMatrix3x3 = simd_float3x3(columns: (
-            normalMatrix4x4[0][SIMD3(0, 1, 2)],
-            normalMatrix4x4[1][SIMD3(0, 1, 2)],
-            normalMatrix4x4[2][SIMD3(0, 1, 2)]
-        ))
-        return normalMatrix3x3
+        let s = self.scale
+        return simd_float3x3(diagonal: SIMD3(1.0 / s.x, 1.0 / s.y, 1.0 / s.z))
     }
 }

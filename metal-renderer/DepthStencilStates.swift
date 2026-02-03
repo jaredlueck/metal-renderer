@@ -18,6 +18,10 @@ struct DepthStencilStates {
         descriptor.isDepthWriteEnabled = true
         descriptor.depthCompareFunction = .lessEqual
     }
+    
+    lazy var hud = makeDepthStencilState(label: "hud"){
+        descriptor in descriptor.isDepthWriteEnabled = false
+    }
 
     let device: MTLDevice
     

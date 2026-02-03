@@ -66,8 +66,6 @@ public class TransformGizmo {
         if !xAxisSelected && !yAxisSelected && !zAxisSelected{
             return
         }
-        // update the object position in the xy plane relative to the camera
-        let screenDirection = SIMD4<Float>(deltaX, deltaY, 0.0, 0.0)
         
         let width = editorCamera.viewportSize.x
         let height = editorCamera.viewportSize.y

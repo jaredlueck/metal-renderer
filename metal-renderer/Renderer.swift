@@ -126,27 +126,6 @@ class Renderer: NSObject, MTKViewDelegate {
         if tex.width != expectedW || tex.height != expectedH {
             return
         }
-
-        let data = self.scene.getSceneData()
-
-        var renderables: [InstancedRenderable] = []
-        var shadowCasterInstances: [InstancedRenderable] = []
-
-        data.renderables.keys.forEach {
-            let instances = self.scene.getSceneData().renderables[$0]!
-            let instancedRenderable = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
-            let shadowCastingInstances = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
-            for instance in instances {
-                instancedRenderable.addInstance(transform: instance.transform )
-                if instance.castsShadows{
-                    shadowCastingInstances.addInstance(transform: instance.transform)
-                }
-            }
-            renderables.append(instancedRenderable)
-            if shadowCastingInstances.instances.count > 0 {
-                shadowCasterInstances.append(shadowCastingInstances)
-            }
-        }
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         forwardPassDescriptor.colorAttachments[0].texture = drawable.texture
@@ -184,21 +163,15 @@ class Renderer: NSObject, MTKViewDelegate {
     }
     
     func encodeShadowPass(into commandBuffer: MTLCommandBuffer){
-        let data = self.scene.getSceneData()
+        let data = self.scene.getRenderSceneData()
 
+        let shadowCastingInstances = data.shadowCasters
         var shadowCastingRenderables: [InstancedRenderable] = []
 
-        data.renderables.keys.forEach {
-            let instances = self.scene.getSceneData().renderables[$0]!
-            let shadowCastingInstances = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
-            for instance in instances {
-                if instance.castsShadows{
-                    shadowCastingInstances.addInstance(transform: instance.transform)
-                }
-            }
-            if shadowCastingInstances.instances.count > 0 {
-                shadowCastingRenderables.append(shadowCastingInstances)
-            }
+        shadowCastingInstances.keys.forEach {
+            let instances = self.scene.getRenderSceneData().shadowCasters[$0]!
+            let renderable = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!, instances: instances)
+            shadowCastingRenderables.append(renderable)
         }
         let pointLights = data.pointLights
         for i in 0..<pointLights.count {
@@ -236,13 +209,13 @@ class Renderer: NSObject, MTKViewDelegate {
     }
 
     func encodeForwardStage(using renderEncoder: MTLRenderCommandEncoder){
-        encodeStage(using: renderEncoder, label: "forward stage"){
-            renderEncoder.setRenderPipelineState(forwardBlinnPhong)
+        encodeStage(using: renderEncoder, label: "pbr"){
+            renderEncoder.setRenderPipelineState(forwardPbr)
             
             let frameData = editor.getFrameData()
-            let sceneData = scene.getSceneData()
+            let sceneData = scene.getRenderSceneData()
             let lights = sceneData.pointLights
-            let sceneRenderables = sceneData.renderables
+            let sceneRenderables = sceneData.renderables[.pbr]!
 
             // Set common uniforms
             withUnsafeBytes(of: frameData) { rawBuffer in
@@ -273,7 +246,51 @@ class Renderer: NSObject, MTKViewDelegate {
                 let instances = sceneRenderables[$0]!
                 let instancedRenderable = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
                 for instance in instances {
-                    instancedRenderable.addInstance(transform: instance.transform )
+                    let i = Instance(transform: instance.transform, material: instance.material)
+                    instancedRenderable.addInstance(instance: i)
+                }
+                instancedRenderable.draw(renderEncoder: renderEncoder, instanceId: nil)
+            }
+        }
+        encodeStage(using: renderEncoder, label: "blinnphong"){
+            renderEncoder.setRenderPipelineState(forwardBlinnPhong)
+            
+            let frameData = editor.getFrameData()
+            let sceneData = scene.getRenderSceneData()
+            let lights = sceneData.pointLights
+            let sceneRenderables = sceneData.renderables[.blinnPhong]!
+
+            // Set common uniforms
+            withUnsafeBytes(of: frameData) { rawBuffer in
+                renderEncoder.setFragmentBytes(rawBuffer.baseAddress!,
+                                               length: MemoryLayout<FrameData>.stride,
+                                         index: Int(BufferIndexFrameData.rawValue))
+                renderEncoder.setVertexBytes(rawBuffer.baseAddress!,
+                                               length: MemoryLayout<FrameData>.stride,
+                                       index: Int(BufferIndexFrameData.rawValue))
+            }
+                    
+            renderEncoder.pushDebugGroup("render meshes")
+            renderEncoder.setDepthStencilState(depthStencilStates.forwardPass)
+            
+            let lightBuffer = lights.withUnsafeBufferPointer { bufferPtr in
+                 return device.makeBuffer(bytes: bufferPtr.baseAddress!, length: MemoryLayout<PointLight>.stride * max(lights.count, 1))
+            }
+            
+            renderEncoder.setFragmentBuffer(lightBuffer, offset: 0, index: Int(BufferIndexLightData.rawValue))
+            
+            var lightCount = lights.count
+            renderEncoder.setFragmentBytes(&lightCount, length: MemoryLayout<UInt>.self.stride, index: Int(BufferIndexPointLightCount.rawValue))
+                        
+            renderEncoder.setFragmentBuffer(lightBuffer, offset: 0, index: Int(BufferIndexLightData.rawValue))
+            renderEncoder.setFragmentTexture(shadowMap, index: Int(TextureIndexShadow.rawValue))
+            
+            sceneRenderables.keys.forEach {
+                let instances = sceneRenderables[$0]!
+                let instancedRenderable = InstancedRenderable(device: device, model: assetManager.assetMap[$0]!)
+                for instance in instances {
+                    let i = Instance(transform: instance.transform, material: instance.material)
+                    instancedRenderable.addInstance(instance: i)
                 }
                 instancedRenderable.draw(renderEncoder: renderEncoder, instanceId: nil)
             }
@@ -299,6 +316,15 @@ class Renderer: NSObject, MTKViewDelegate {
         descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
         descriptor.depthAttachmentPixelFormat = depthPixelFormat
     }
+    
+    lazy var forwardPbr = makeRenderPipelineState(label: "forward pbr") { descriptor in
+        descriptor.vertexFunction = library.makeFunction(name: "phongVertex")!
+        descriptor.fragmentFunction = library.makeFunction(name: "pbrFragment")!
+        descriptor.vertexDescriptor = VertexDescriptors.mtl()
+        descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
+        descriptor.depthAttachmentPixelFormat = depthPixelFormat
+    }
+    
     
     lazy var pointLightShadow = makeRenderPipelineState(label: "point light shadow") { descriptor in
         descriptor.vertexFunction = library.makeFunction(name: "cubeShadowMapVertex")!

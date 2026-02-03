@@ -14,6 +14,7 @@
 /* Begin PBXFileReference section */
 		0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "metal-renderer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F628D662F08AD08001EEC60 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		0FB823482F2D6D990086C503 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -35,6 +36,11 @@
 			path = "metal-renderer";
 			sourceTree = "<group>";
 		};
+		0FB823BE2F2D717C0086C503 /* images */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = images;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,6 +58,8 @@
 		0F5B44522EE7DC94006C3F8B = {
 			isa = PBXGroup;
 			children = (
+				0FB823BE2F2D717C0086C503 /* images */,
+				0FB823482F2D6D990086C503 /* README.md */,
 				0F628D662F08AD08001EEC60 /* .gitignore */,
 				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
 				0F5B445C2EE7DC94006C3F8B /* Products */,
@@ -83,6 +91,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
+				0FB823BE2F2D717C0086C503 /* images */,
 			);
 			name = "metal-renderer";
 			packageProductDependencies = (

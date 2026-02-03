@@ -12,10 +12,12 @@ struct RenderableInstance {
     var nodeId: String
     var transform: Transform
     var castsShadows: Bool = true
+    var material: Material
 }
 
 public struct SceneData{
-    var renderables: [String: [RenderableInstance]] = [:]
+    var renderables: [Shader: [String: [Instance]]] = [:]
+    var shadowCasters: [String: [Instance]] = [:]
     var pointLights: [PointLight] = []
 }
 
@@ -35,30 +37,33 @@ public class Node: Codable {
     var nodeType: NodeType
     var id: String = UUID().uuidString
     var transform: Transform
+    var material: Material
     var children: [Node] = []
     public var assetId: String? = nil
     var lightData: LightSceneData? = nil
     var castShadows: Bool = true
     
     enum CodingKeys: String, CodingKey {
-        case nodeType, id, children, assetId, lightData, transform
+        case nodeType, id, children, assetId, lightData, transform, material
     }
     
     public init(nodeType: NodeType, transform: Transform){
         self.nodeType = nodeType
         self.transform = transform
+        self.material = Material()
     }
     
     public init(nodeType: NodeType, transform: Transform, assetId: String) {
         self.nodeType = nodeType
         self.transform = transform
         self.assetId = assetId
+        self.material = Material()
     }
-    
     public init(nodeType: NodeType, transform: Transform, lightData: LightSceneData) {
         self.nodeType = nodeType
         self.transform = transform
         self.lightData = lightData
+        self.material = Material()
     }
     
     public required init(from decoder: any Decoder) throws {
@@ -69,6 +74,7 @@ public class Node: Codable {
         self.children = try! values.decode([Node].self, forKey: .children)
         self.assetId = try! values.decodeIfPresent(String.self, forKey: .assetId)
         self.lightData = try! values.decodeIfPresent(LightSceneData.self, forKey: .lightData)
+        self.material = Material()
     }
 }
 
@@ -95,31 +101,64 @@ public class Scene: Codable {
         rootNode.children.append(node)
     }
     
-    func getSceneData() -> SceneData {
-        var renderableMap: [String: [RenderableInstance]] = [:]
-        var lights: [PointLight] = []
+    func getRenderSceneData() -> SceneData {
         let sceneNodes = traverse(rootNode)
-
+        var lights: [PointLight] = []
+        var renderablesByShader: [Shader: [String: [Instance]]] = [:]
+        var shadowCasters: [String: [Instance]] = [:]
+        
+        renderablesByShader[.blinnPhong] = [:]
+        renderablesByShader[.pbr] = [:]
+        
         for i in 0..<sceneNodes.count {
             let node = sceneNodes[i]
             if node.nodeType == .model {
-                let assetId = node.assetId!
-                if renderableMap[assetId] == nil {
-                    renderableMap[assetId] = []
+                let shader = node.material.shader
+                let instance = Instance(transform: node.transform, material: node.material)
+                if node.castShadows {
+                    if shadowCasters[node.assetId!] == nil {
+                        shadowCasters[node.assetId!] = []
+                    }
+                    shadowCasters[node.assetId!]!.append(instance)
                 }
-                var instance = RenderableInstance(nodeId: node.id, transform: node.transform)
-                if node.castShadows == false {
-                    instance.castsShadows = node.castShadows
+
+                if renderablesByShader[shader]![node.assetId!] == nil{
+                    renderablesByShader[shader]![node.assetId!] = []
                 }
-                instance.castsShadows = node.castShadows
-                renderableMap[assetId]?.append(instance)
+                renderablesByShader[shader]![node.assetId!]!.append(instance)
             } else if node.nodeType == .pointLight {
                 let pos = node.transform.position
                 lights.append(PointLight(position: SIMD4(pos, 1.0), color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0), radius: 15.0))
             }
         }
-        return SceneData(renderables: renderableMap, pointLights: lights)
+        return SceneData(renderables: renderablesByShader, shadowCasters: shadowCasters, pointLights: lights)
     }
+    
+//    func getSceneData() -> SceneData {
+//        var renderableMap: [String: [RenderableInstance]] = [:]
+//        var lights: [PointLight] = []
+//        let sceneNodes = traverse(rootNode)
+//
+//        for i in 0..<sceneNodes.count {
+//            let node = sceneNodes[i]
+//            if node.nodeType == .model {
+//                let assetId = node.assetId!
+//                if renderableMap[assetId] == nil {
+//                    renderableMap[assetId] = []
+//                }
+//                var instance = RenderableInstance(nodeId: node.id, transform: node.transform, material: node.material)
+//                if node.castShadows == false {
+//                    instance.castsShadows = node.castShadows
+//                }
+//                instance.castsShadows = node.castShadows
+//                renderableMap[assetId]?.append(instance)
+//            } else if node.nodeType == .pointLight {
+//                let pos = node.transform.position
+//                lights.append(PointLight(position: SIMD4(pos, 1.0), color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0), radius: 15.0))
+//            }
+//        }
+//        return SceneData(renderables: renderableMap, pointLights: lights)
+//    }
 
     public func getNodes() -> [Node] {
         var nodes: [Node] = []

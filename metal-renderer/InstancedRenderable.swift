@@ -12,39 +12,37 @@ class Instance {
     var id: String
     var transform: Transform
     var castsShadows: Bool = true
+    var material: Material
 //    var renderable: InstancedRenderable
     
-    init(id: String, transform: Transform, renderable: InstancedRenderable) {
-        self.id = id
+    init(transform: Transform, material: Material) {
+        self.id = UUID().uuidString
         self.transform = transform
-//        self.renderable = renderable
+        self.material = material
     }
 }
 
 class InstancedRenderable {
     public var selectable = true
     let model: Model
-    let sampler: MTLSamplerState
     public var instances: [Instance] = []
     var instanceBuffer: MTLBuffer?
     let device: MTLDevice
     
     init(device: MTLDevice, model: Model) {
         self.model = model
-        let samplerDescriptor = MTLSamplerDescriptor()
-        samplerDescriptor.minFilter = .linear
-        samplerDescriptor.magFilter = .linear
-        samplerDescriptor.mipFilter = .linear
-        guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
-            fatalError("Failed to create sampler state")
-        }
-        self.sampler = sampler
         self.device = device
     }
+    
+    init(device: MTLDevice, model: Model, instances: [Instance]) {
+        self.model = model
+        self.device = device
+        self.instances = instances
+    }
 
-    func addInstance(transform: Transform) {
+    func addInstance(instance: Instance) {
         let id = UUID().uuidString
-        instances.append(Instance(id: id, transform: transform, renderable: self))
+        instances.append(instance)
     }
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
@@ -59,12 +57,7 @@ class InstancedRenderable {
                 for mdlSubmesh in mdlSubmeshes {
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
-                    let material = mdlSubmesh.material!
-                    
-                    let baseColorPropery = material.propertyNamed("baseColor")!
-                    let baseColor = baseColorPropery.float4Value
-                    
-                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: baseColor) }
+                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor, specular:$0.material.specular, roughness: $0.material.roughness) }
                     let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
                     
                     instanceData.withUnsafeBytes { rawBuffer in

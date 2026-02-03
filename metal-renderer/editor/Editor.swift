@@ -78,6 +78,7 @@ class Editor {
     let transformGizmo: TransformGizmo
     var assetsWindow: AssetsWindow
     let transformPanel: TransformPanel
+    var sceneArea: SceneArea
     
     var depthStencilStates: DepthStencilStates
     
@@ -110,7 +111,9 @@ class Editor {
         try! self.circleShader = ShaderProgram(device: device, descriptor: ShaderProgramDescriptor(vertexName: "outlineVertex", fragmentName: "circleFragment"))
         self.circlePipeline = RenderPipeline(device: device, program: self.circleShader, vertexDescriptor: nil, colorAttachmentPixelFormat: MTLPixelFormat.bgra8Unorm_srgb, depthAttachmentPixelFormat: MTLPixelFormat.depth32Float)
         self.device = device
-        
+        let size = view.bounds.size
+        let width = Int(size.width)
+        let height = Int(size.height)
         self.transformGizmo = TransformGizmo(device: device)
         
         assetsWindow = AssetsWindow(scene: scene)
@@ -121,9 +124,8 @@ class Editor {
         self.view = view
         self.scene = scene
         self.assetManager = assetManager
-        let size = view.bounds.size
-        let width = Int(size.width)
-        let height = Int(size.height)
+        self.sceneArea = SceneArea(scene: scene, assetManager: assetManager, pivot: ImVec2(x: 0, y: 0), position: ImVec2(x: 0, y: 0), size: ImVec2(x: Float(width), y: Float(height)))
+
         
         self.editorCamera = Camera(position: SIMD3<Float>(0, 1, 5), viewportSize: SIMD2<Float>(Float(width), Float(height)))
         let textureLoader = MTKTextureLoader(device: device)
@@ -275,6 +277,8 @@ class Editor {
         
         encoder.setDepthStencilState(depthStencilStates.forwardPass)
         
+//        encodeStage(using: <#T##MTLRenderCommandEncoder#>, label: <#T##String#>, <#T##() -> Void#>)
+        
         self.gridPipeline.bind(encoder: encoder)
         
         withUnsafeBytes(of: frameData) { rawBuffer in
@@ -299,17 +303,6 @@ class Editor {
         encoder.endEncoding()
         
         if let selected = selectedEntity {
-            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
-                fatalError("Failed to create render command encoder")
-            }
-            self.uniformColorPipeline.bind(encoder: encoder)
-            withUnsafeBytes(of: frameData) { rawBuffer in
-                encoder.setVertexBytes(rawBuffer.baseAddress!,
-                                           length: MemoryLayout<FrameData>.stride,
-                                           index: Int(BufferIndexFrameData.rawValue))
-            }
-            transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
-            encoder.endEncoding()
             if selected.nodeType == .model {
                 guard let maskEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: maskPassDescriptor) else {
                     fatalError("Failed to create render command encoder")
@@ -326,12 +319,12 @@ class Editor {
                 let model = assetManager.getAssetById(selected.assetId!)!
                 
                 let instance = InstancedRenderable(device: device, model:model)
-                instance.addInstance(transform: selected.transform)
+                let i = Instance(transform: selected.transform, material: selected.material)
+                instance.addInstance(instance: i)
                 instance.draw(renderEncoder: maskEncoder, instanceId: nil)
                 maskEncoder.endEncoding()
                 
 //                encodeStage(using: <#T##MTLRenderCommandEncoder#>, label: <#T##String#>, <#T##() -> Void#>)
-//                
                 guard let outlineEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
                     fatalError("Failed to create render command encoder")
                 }
@@ -351,6 +344,17 @@ class Editor {
                 
                 outlineEncoder.endEncoding()
             }
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
+                fatalError("Failed to create render command encoder")
+            }
+            self.uniformColorPipeline.bind(encoder: encoder)
+            withUnsafeBytes(of: frameData) { rawBuffer in
+                encoder.setVertexBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameData>.stride,
+                                           index: Int(BufferIndexFrameData.rawValue))
+            }
+            transformGizmo.encode(encoder: encoder, mouseX: mouseX, mouseY: mouseY, editorCamera: editorCamera, position: selected.transform.position)
+            encoder.endEncoding()
         }
         imGui(view: view, commandBuffer: commandBuffer)
     }
@@ -396,53 +400,49 @@ class Editor {
         transformPanel.encode()
         
         var show_demo_window = true
-       
-        assetsWindow.encode()
         
         imGuiEncoder.setDepthStencilState(depthStencilStates.shadowGeneration)
-                
-        ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), ImGuiCond(ImGuiCond_Always.rawValue), ImVec2(x: 1, y: 0))
-        ImGuiSetNextWindowSize(ImVec2(x: 150, y: 100), 0)
-        ImGuiBegin("Scene Hierarchy", &show_demo_window, 0)
-        ImGuiEnd()
-        
-        let sceneFlags = ImGuiWindowFlags(
-            ImGuiWindowFlags_NoTitleBar.rawValue |
-            ImGuiWindowFlags_NoBackground.rawValue |
-            ImGuiWindowFlags_NoBringToFrontOnFocus.rawValue |
-            ImGuiWindowFlags_NoNavFocus.rawValue |
-            ImGuiWindowFlags_NoMove.rawValue |
-            ImGuiWindowFlags_NoResize.rawValue
-        )
-        
-        ImGuiBegin("Scene area", &show_demo_window,sceneFlags )
-        
-        var size = ImVec2()
-        ImGuiGetContentRegionAvail(&size)
-        ImGuiInvisibleButton("SceneDropZone", size, 0);
-        
-        hoveringSceneWindow = ImGuiIsItemHovered(0)
+        if let selected = selectedEntity, selected.nodeType == .model{
+            ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), ImGuiCond(ImGuiCond_Always.rawValue), ImVec2(x: 1, y: 0))
+            ImGuiSetNextWindowSize(ImVec2(x: 300, y: 325), 0)
+            ImGuiBegin("Inspector", &show_demo_window, 0)
+            if ImGuiCollapsingHeader("Material", Int32(ImGuiTreeNodeFlags_DefaultOpen.rawValue)){
+                ImGuiTextV("Slider")
+                if ImGuiSliderFloat("roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue)) {
+                    
+                }
+                var a = Float(1.0)
+                if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), &a){}
+                var items: [Shader] = [.blinnPhong, .pbr]
+                var currentIndex: Int = items.firstIndex(of: selected.material.shader)!
+                // Begin the combo box with a label and the preview value
+                if ImGuiBeginCombo("Shader", selected.material.shader.rawValue, 0) {
+                    for i in 0..<items.count {
+                        // Determine if this item is currently selected
+                        var isSelected = (i == currentIndex)
 
-        if ImGuiBeginDragDropTarget() {
-            if let payload = ImGuiAcceptDragDropPayload("ASSET_URL", 0) {
-                let rawPtr = payload.pointee.Data
-                let size = Int(payload.pointee.DataSize)
+                        // Render the item as selectable
+                        if ImGuiSelectable(items[i].rawValue, &isSelected, 0, ImVec2()) {
+                            currentIndex = i
+                            selected.material.shader = items[i]
+                        }
+                        
 
-                let buffer = UnsafeRawBufferPointer(start: rawPtr, count: size)
-                let filename = String(decoding: buffer, as: UTF8.self)
+                        // Optionally set default focus on the selected item for keyboard navigation
+                        if isSelected {
+                            ImGuiSetItemDefaultFocus()
+                        }
+                    }
+                    ImGuiEndCombo()
+                }
 
-                let assetId = self.assetManager.loadAssetAtPath(filename)
-                scene.add(Node(nodeType: .model, transform: Transform(), assetId: assetId))
             }
-            if let payload = ImGuiAcceptDragDropPayload("LIGHT_SOURCE", 0) {
-                let rawPtr = payload.pointee.Data
-                let size = Int(payload.pointee.DataSize)
-                
-                scene.addLight(position: SIMD3<Float>(0.0, 1.0, 0.0), color: SIMD3<Float>(1.0, 1.0, 1.0), radius: 10.0)
-            }
-            ImGuiEndDragDropTarget()
+            
+            ImGuiEnd()
         }
-        ImGuiEnd()
+            
+        assetsWindow.encode()
+        sceneArea.encode()
 
         ImGuiRender()
         let drawData = ImGuiGetDrawData()!
@@ -486,19 +486,6 @@ class Editor {
         encoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: xzCircle.count)
     }
     
-    func subdivideClosedPolygon(polygon: [SIMD2<Float>], count: Int) -> [SIMD2<Float>]{
-        if count == 0{
-            return polygon
-        }
-        var newVerts: [SIMD2<Float>] = Array(repeating: SIMD2<Float>(repeating: 0.0), count: 2 * polygon.count)
-        newVerts.replaceSubrange(0..<polygon.count, with: polygon)
-        for i in 0..<polygon.count{
-            newVerts[2*i] = 0.75 * polygon[i] + 0.25 * polygon[(i + 1) % polygon.count]
-            newVerts[2*i+1] = 0.25 * polygon[i] + 0.75 * polygon[(i + 1) % polygon.count]
-        }
-        return subdivideClosedPolygon(polygon: newVerts, count: count - 1)
-    }
-    
     struct Ray {
         var origin: SIMD3<Float>
         var direction: SIMD3<Float>
@@ -539,7 +526,7 @@ class Editor {
     func AABBintersect(px: Float, py: Float){
         let io = ImGuiGetIO()!
         let wantsCaptureMouse = io.pointee.WantCaptureMouse
-        if wantsCaptureMouse && !hoveringSceneWindow {
+        if wantsCaptureMouse && !sceneArea.hovered {
             return
         }
         if dragging {
@@ -615,7 +602,6 @@ class Editor {
     func updateTextures(size: CGSize){
         let colorTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: Int(size.width), height: Int(size.height), mipmapped: false)
         colorTextureDescriptor.usage = [.shaderRead, .renderTarget]
-        
         self.maskTexture = device.makeTexture(descriptor: colorTextureDescriptor)!
     }
     
@@ -650,7 +636,7 @@ class Editor {
         let io = ImGuiGetIO()!
         dragging = true
         let wantsCaptureMouse = io.pointee.WantCaptureMouse
-        if wantsCaptureMouse && !hoveringSceneWindow {
+        if wantsCaptureMouse && !sceneArea.hovered {
             return
         }
         if(selectedEntity != nil){

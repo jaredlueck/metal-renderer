@@ -47,4 +47,6 @@ struct InstanceData {
     
     // Material
     simd_float4 baseColor;
+    simd_float4 specular;
+    float roughness;
 };
