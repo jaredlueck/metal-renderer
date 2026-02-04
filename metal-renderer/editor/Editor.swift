@@ -19,7 +19,7 @@ enum TransformMode {
 struct CircleUniforms {
     var radius: simd_float1
     var thickness: simd_float1
-    var color: SIMD3<Float>;
+    var color: SIMD3<Float>
     var center: SIMD2<Float>
 }
 
@@ -79,6 +79,10 @@ class Editor {
     var assetsWindow: AssetsWindow
     let transformPanel: TransformPanel
     var sceneArea: SceneArea
+    
+    var debugNormal = false
+    var debugSpecular = false
+    var debugDiffuse = false
     
     var depthStencilStates: DepthStencilStates
     
@@ -290,7 +294,7 @@ class Editor {
         encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
         
         let sceneLights = scene.getLights()
-
+        encoder.setDepthStencilState(depthStencilStates.hud)
         for light in sceneLights {
             drawLightIcon(encoder: encoder, light: light)
         }
@@ -407,16 +411,12 @@ class Editor {
             ImGuiSetNextWindowSize(ImVec2(x: 300, y: 325), 0)
             ImGuiBegin("Inspector", &show_demo_window, 0)
             if ImGuiCollapsingHeader("Material", Int32(ImGuiTreeNodeFlags_DefaultOpen.rawValue)){
-                ImGuiTextV("Slider")
-                if ImGuiSliderFloat("roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue)) {
-                    
-                }
-                var a = Float(1.0)
-                if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), &a){}
-                var items: [Shader] = [.blinnPhong, .pbr]
+                let items: [Shader] = [.blinnPhong, .pbr]
                 var currentIndex: Int = items.firstIndex(of: selected.material.shader)!
                 // Begin the combo box with a label and the preview value
-                if ImGuiBeginCombo("Shader", selected.material.shader.rawValue, 0) {
+                ImGuiTextUnformatted("Shader")
+                ImGuiSameLine(Float(0.0), Float(15.0))
+                if ImGuiBeginCombo("##Shader", selected.material.shader.rawValue, 0) {
                     for i in 0..<items.count {
                         // Determine if this item is currently selected
                         var isSelected = (i == currentIndex)
@@ -435,15 +435,37 @@ class Editor {
                     }
                     ImGuiEndCombo()
                 }
-
+                if selected.material.shader == .pbr{
+                    ImGuiTextUnformatted("Roughness")
+                    ImGuiSameLine(Float(0.0), Float(5.0))
+                    if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                        
+                    }
+                } else {
+                    ImGuiTextUnformatted("Shininess")
+                    ImGuiSameLine(Float(0.0), Float(5.0))
+                    if ImGuiSliderFloat("##shininess", &selected.material.shininess, Float(1.0), Float(256.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                        
+                    }
+                }
+                var a = Float(1.0)
+                if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), nil){}
             }
-            
+            ImGuiCheckbox("Casts Shadows", &selected.castShadows)
             ImGuiEnd()
         }
             
         assetsWindow.encode()
         sceneArea.encode()
-
+        
+        ImGuiSetNextWindowPos(ImVec2(x: 10, y: 400), ImGuiCond(ImGuiCond_Always.rawValue), ImVec2(x: 0, y: 0))
+        ImGuiSetNextWindowSize(ImVec2(x: 100, y: 100), 0)
+        ImGuiBegin("Debug", &show_demo_window, 0)
+        ImGuiCheckbox("normal", &debugNormal)
+        ImGuiCheckbox("specular", &debugSpecular)
+        ImGuiCheckbox("diffuse", &debugDiffuse)
+        ImGuiEnd()
+        
         ImGuiRender()
         let drawData = ImGuiGetDrawData()!
 
@@ -451,7 +473,14 @@ class Editor {
         imGuiEncoder.endEncoding()
     }
     
+    func getDebugValues() -> DebugData {
+        return DebugData(normal: debugNormal ? 1 : 0, specular: debugSpecular ? 1 : 0, diffuse: debugDiffuse ? 1 : 0)
+    }
+    
     func drawRadius(encoder: MTLRenderCommandEncoder, origin: SIMD3<Float>, radius: Float){
+        uniformColorPipeline.bind(encoder: encoder)
+        var color = SIMD4<Float>(1, 1, 1, 1)
+        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.size, index: Int(BufferIndexPipeline.rawValue))
         let square: [SIMD2<Float>] = [SIMD2<Float>(radius, radius), SIMD2<Float>(-radius, radius), SIMD2<Float>(-radius, -radius), SIMD2<Float>(radius, -radius)]
         let circle = subdivideClosedPolygon(polygon: square, count: 10)
         

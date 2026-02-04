@@ -13,7 +13,8 @@ enum BufferIndices : int {
     BufferIndexInstanceData = 2,
     BufferIndexLightData = 3,
     BufferIndexPointLightCount = 4,
-    BufferIndexPipeline = 5
+    BufferIndexPipeline = 5,
+    BufferIndexDebug = 6
 };
 
 enum TextureIndices {
@@ -49,4 +50,13 @@ struct InstanceData {
     simd_float4 baseColor;
     simd_float4 specular;
     float roughness;
+    
+    // shininess for blinn-phong shader
+    float shininess;
+};
+
+struct DebugData {
+    uint8_t normal;
+    uint8_t specular;
+    uint8_t diffuse;
 };

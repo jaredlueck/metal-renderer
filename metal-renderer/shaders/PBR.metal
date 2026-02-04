@@ -78,14 +78,18 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
                                  constant FrameData& uniforms [[buffer(BufferIndexFrameData)]],
                                  constant PointLight* pointLights [[buffer(BufferIndexLightData)]],
                                  constant uint& lightCount [[buffer(BufferIndexPointLightCount)]],
-                                 texturecube_array<float> shadowAtlas [[texture(TextureIndexShadow)]],
-                                 constant InstanceData& material [[buffer(BufferIndexInstanceData)]]) {
+                            texturecube_array<float, access :: read> shadowAtlas [[texture(TextureIndexShadow)]],
+                                 constant InstanceData& material [[buffer(BufferIndexInstanceData)]],
+                                 constant DebugData& debug [[buffer(BufferIndexDebug)]]) {
     constexpr sampler linearSampler (mip_filter::linear,
                                      mag_filter::linear,
                                      min_filter::linear);
     
     // Compute normalized view vector from surface to camera in world space
     float3 N = normalize(in.normal);
+    if(debug.normal == 1){
+        return float4(N, 1.0);
+    }
     float3 V = normalize(-in.viewPos);
         
     float3 ambient = 0.2 * material.baseColor.xyz;
@@ -102,7 +106,7 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
         float3 shadowDir = normalize(in.worldPos - light.position.xyz);
         
-        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i, 3);
+        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i);
         
         // incident light color with attenuation
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
@@ -114,6 +118,13 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
         specular += shadowFactor * lightSpec * lightColor;
     }
+    if(debug.specular == 1){
+        return float4(specular, 1.0);
+    }
+    if(debug.diffuse == 1){
+        return float4(diffuse, 1.0);
+    }
+
     float3 result = ambient + diffuse + specular;
     return float4(result, 1.0);
 }

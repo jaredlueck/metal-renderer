@@ -57,9 +57,9 @@ class InstancedRenderable {
                 for mdlSubmesh in mdlSubmeshes {
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
-                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor, specular:$0.material.specular, roughness: $0.material.roughness) }
+                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor, specular:$0.material.specular, roughness: $0.material.roughness, shininess: $0.material.shininess) }
                     let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
-                    
+
                     instanceData.withUnsafeBytes { rawBuffer in
                         renderEncoder.setVertexBytes(
                             rawBuffer.baseAddress!,
@@ -72,7 +72,7 @@ class InstancedRenderable {
                             index: Int(BufferIndexInstanceData.rawValue)
                         )
                     }
-                    
+
                     switch mdlSubmesh.indexType {
                     case .uInt16:
                         indexType = .uint16
@@ -81,7 +81,7 @@ class InstancedRenderable {
                     default:
                         indexType = .uint32
                     }
-                    
+
                     if let mtkIndexBuffer = mdlSubmesh.indexBuffer as? MTKMeshBuffer {
                         renderEncoder.drawIndexedPrimitives(
                             type: .triangle,

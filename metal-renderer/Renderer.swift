@@ -33,12 +33,12 @@ let faceDirections: [SIMD3<Float>] = [
 ]
 
 let faceUps: [SIMD3<Float>] = [
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0,  0,  1),
+    SIMD3<Float>(0, 1,  0),
+    SIMD3<Float>(0, 1,  0),
     SIMD3<Float>(0,  0,  -1),
-    SIMD3<Float>(0, -1,  0),
-    SIMD3<Float>(0, -1,  0)
+    SIMD3<Float>(0,  0,   1),
+    SIMD3<Float>(0, 1,  0),
+    SIMD3<Float>(0, 1,  0)
 ]
 
 class Renderer: NSObject, MTKViewDelegate {
@@ -188,7 +188,7 @@ class Renderer: NSObject, MTKViewDelegate {
                         let forward = faceDirections[face]
                         let up = faceUps[face]
                         let view = matrix_lookAt(eye: eyePos, target: eyePos + forward, up: up)
-                        let projection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(90), aspectRatio: 1, nearZ: 1, farZ: light.radius)
+                        let projection = matrix_perspective_right_hand(fovyRadians: radians_from_degrees(90), aspectRatio: 1, nearZ: 0.01, farZ: light.radius)
                         var uniforms = ShadowUniforms(view: view, projection: projection, position: light.position, radius: light.radius)
                         withUnsafeBytes(of: &uniforms){
                             rawBuffer in
@@ -209,6 +209,12 @@ class Renderer: NSObject, MTKViewDelegate {
     }
 
     func encodeForwardStage(using renderEncoder: MTLRenderCommandEncoder){
+        var debugData = editor.getDebugValues()
+        withUnsafeBytes(of: &debugData){ rawBuffer in
+            renderEncoder.setFragmentBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<DebugData>.stride,
+                                           index: Int(BufferIndexDebug.rawValue))
+        }
         encodeStage(using: renderEncoder, label: "pbr"){
             renderEncoder.setRenderPipelineState(forwardPbr)
             
