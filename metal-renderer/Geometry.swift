@@ -6,7 +6,7 @@
 //
 
 func subdivideClosedPolygon(polygon: [SIMD2<Float>], count: Int) -> [SIMD2<Float>]{
-    if count == 0{
+    if count == 0 {
         return polygon
     }
     var newVerts: [SIMD2<Float>] = Array(repeating: SIMD2<Float>(repeating: 0.0), count: 2 * polygon.count)
@@ -17,3 +17,4 @@ func subdivideClosedPolygon(polygon: [SIMD2<Float>], count: Int) -> [SIMD2<Float
     }
     return subdivideClosedPolygon(polygon: newVerts, count: count - 1)
 }
+

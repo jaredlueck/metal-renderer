@@ -97,7 +97,7 @@ fragment float4 phongFragment(VertexOut in [[stage_in]],
         float lightDiffuse = max(dot(N, L), 0.0);
         float lightSpec = pow(max(dot(N, H), 0.0), material.shininess);
         
-        diffuse +=  lightDiffuse * material.baseColor.xyz;
+        diffuse +=  shadowFactor * lightDiffuse * material.baseColor.xyz;
         specular += shadowFactor * lightSpec * lightColor;
     }
     if(debug.specular == 1){

@@ -632,6 +632,7 @@ class Editor {
         let colorTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: Int(size.width), height: Int(size.height), mipmapped: false)
         colorTextureDescriptor.usage = [.shaderRead, .renderTarget]
         self.maskTexture = device.makeTexture(descriptor: colorTextureDescriptor)!
+        sceneArea.size = ImVec2(x: Float(size.width), y: Float(size.height))
     }
     
     func updateCameraTransform(deltaX: Float, deltaY: Float){

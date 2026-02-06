@@ -106,7 +106,8 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float receiverDepth = distance(in.worldPos,  light.position.xyz) / light.radius;
         float3 shadowDir = normalize(in.worldPos - light.position.xyz);
         
-        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCube(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i);
+        float specShadow = PCFCube(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i, 0);
+        float shadowFactor = receiverDepth > 1 ? 1.0 : PCFCubePoisson(shadowAtlas, linearSampler, shadowDir, receiverDepth, in.worldNormal, i);
         
         // incident light color with attenuation
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
@@ -115,8 +116,8 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float alpha = material.roughness * material.roughness;
         float3 lightSpec = max(BRDF::cookTorrence(specular, alpha, N, L, V), 0);
         
-        diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
-        specular += shadowFactor * lightSpec * lightColor;
+        diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz;
+        specular += specShadow * lightSpec * lightColor;
     }
     if(debug.specular == 1){
         return float4(specular, 1.0);
