@@ -128,37 +128,11 @@ public class Scene: Codable {
                 renderablesByShader[shader]![node.assetId!]!.append(instance)
             } else if node.nodeType == .pointLight {
                 let pos = node.transform.position
-                lights.append(PointLight(position: SIMD4(pos, 1.0), color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0), radius: 15.0))
+                lights.append(PointLight(position: SIMD4(pos, 1.0), color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0), radius: node.lightData!.radius))
             }
         }
         return SceneData(renderables: renderablesByShader, shadowCasters: shadowCasters, pointLights: lights)
     }
-    
-//    func getSceneData() -> SceneData {
-//        var renderableMap: [String: [RenderableInstance]] = [:]
-//        var lights: [PointLight] = []
-//        let sceneNodes = traverse(rootNode)
-//
-//        for i in 0..<sceneNodes.count {
-//            let node = sceneNodes[i]
-//            if node.nodeType == .model {
-//                let assetId = node.assetId!
-//                if renderableMap[assetId] == nil {
-//                    renderableMap[assetId] = []
-//                }
-//                var instance = RenderableInstance(nodeId: node.id, transform: node.transform, material: node.material)
-//                if node.castShadows == false {
-//                    instance.castsShadows = node.castShadows
-//                }
-//                instance.castsShadows = node.castShadows
-//                renderableMap[assetId]?.append(instance)
-//            } else if node.nodeType == .pointLight {
-//                let pos = node.transform.position
-//                lights.append(PointLight(position: SIMD4(pos, 1.0), color: SIMD4<Float>(1.0, 1.0, 1.0, 1.0), radius: 15.0))
-//            }
-//        }
-//        return SceneData(renderables: renderableMap, pointLights: lights)
-//    }
 
     public func getNodes() -> [Node] {
         var nodes: [Node] = []
