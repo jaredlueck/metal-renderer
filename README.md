@@ -1,6 +1,6 @@
 # Metal Renderer
 
-![scene](./images/scene.png)
+![scene](./images/metalrenderer.gif)
  
 ## Features
 
