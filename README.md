@@ -1,18 +1,18 @@
 # Metal Renderer
 
+Real-time render engine built with Metal and Swift.
+
 ![scene](./images/metalrenderer.gif)
  
 ## Features
 
-### Interactive editor
-
-The renderer has a UI layer using imGui. 
-
-- Pick objects in the scene by clicking on them.
-- Update selected object transform
-- Drag and drop new objects into the scene
-- Add light sources to the scene
-- Save the scene to disk
+- OBJ loader
+- Instanced rendering
+- Blinn phong shading model
+- Scene graph (n-ary tree)
+- Point-light cube map shadow mapping with PCF
+- Scene persistance
+- ImGui editor layer
 
 ### Scene Persistance
 
@@ -44,12 +44,7 @@ Scene is stored as an n-ary tree and can be saved and loaded from disk for persi
 }
 ```
 
-### Shadows
-
-Shadows are computed with shadow cube maps for each point light in the scene. PCF is applied when sampling the shadows maps for smoothening.
-
-### Shading
-
-Currently blinn-phong shading model is used.
+### Road map
+- PBR with cook-torrance specular and Oren-Nayar diffuse BRDF
 
 
