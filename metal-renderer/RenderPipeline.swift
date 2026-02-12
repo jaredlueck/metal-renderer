@@ -19,6 +19,15 @@ class RenderPipeline{
         pipelineDescriptor.vertexFunction = vertexFunction
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.colorAttachments[0].pixelFormat = colorAttachmentPixelFormat
+        // Enable alpha blending
+        let attachment = pipelineDescriptor.colorAttachments[0]
+        attachment?.isBlendingEnabled = true
+        attachment?.rgbBlendOperation = .add
+        attachment?.alphaBlendOperation = .add
+        attachment?.sourceRGBBlendFactor = .sourceAlpha
+        attachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        attachment?.sourceAlphaBlendFactor = .sourceAlpha
+        attachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         pipelineDescriptor.depthAttachmentPixelFormat = depthAttachmentPixelFormat
 
         if let vertexDescriptor = vertexDescriptor {

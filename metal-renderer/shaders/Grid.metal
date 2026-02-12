@@ -32,27 +32,39 @@ vertex VSOut gridVertex(uint vid [[vertex_id]], constant FrameData& uniforms [[b
     };
     o.worldPos = vertices[vid].xyz;
     o.position = projection * view * float4(vertices[vid], 1.0);
-    
     return o;
 }
 
 fragment float4 gridFragment(VSOut in [[stage_in]]){
     float3 pos = in.worldPos;
-    float eps = 0.015;
+    
+    float dist = distance(pos, float3(0, 0, 0));
+    float falloff = 1 - (dist / 30);
+    float fx = fract(pos.x);
+    float fz = fract(pos.z);
 
-    bool onXaxis = abs(pos.y + 0.1) < eps &&  abs(pos.z) < eps;
-    bool onZaxis = abs(pos.x) < eps && abs(pos.y + 0.1) < eps;
-    if(onXaxis){
-        return float4(1.0, 0.0, 0.0, 1.0);
-    }
-    if(onZaxis){
-        return float4(0.0, 0.0, 1.0, 1.0);
-    }
-    bool onGridXZPlane = fract(pos.x) < eps || fract(pos.z) < eps;
-    if (onGridXZPlane) {
-        return float4(1.0, 1.0, 1.0, 1.0);
-    }
-    discard_fragment();
-    return float4(0);
+    float px = fwidth(fx);
+    float pz = fwidth(fz);
+
+    float lineWidth = 0.015;
+    float smoothness = 1.0;
+
+    float distLeft   = fx;
+    float distRight  = 1.0 - fx;
+
+    float distTop    = fz;
+    float distBottom = 1.0 - fz;
+
+    float halfW = 0.5 * lineWidth;
+
+    float left   = 1.0 - smoothstep(halfW - smoothness * px, halfW + smoothness * px, distLeft);
+    float right  = 1.0 - smoothstep(halfW - smoothness * px, halfW + smoothness * px, distRight);
+
+    float top    = 1.0 - smoothstep(halfW - smoothness * pz, halfW + smoothness * pz, distTop);
+    float bottom = 1.0 - smoothstep(halfW - smoothness * pz, halfW + smoothness * pz, distBottom);
+    float a = max(max(left, right), max(top, bottom));
+    float minDist = min(min(distLeft, distRight), min(distTop, distBottom));
+    
+    return float4(1.0, 1.0, 1.0, a) * falloff;
 }
 
