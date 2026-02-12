@@ -426,7 +426,6 @@ class Editor {
                             currentIndex = i
                             selected.material.shader = items[i]
                         }
-                        
 
                         // Optionally set default focus on the selected item for keyboard navigation
                         if isSelected {
@@ -439,6 +438,11 @@ class Editor {
                     ImGuiTextUnformatted("Roughness")
                     ImGuiSameLine(Float(0.0), Float(5.0))
                     if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                        
+                    }
+                    ImGuiTextUnformatted("Albedo")
+                    ImGuiSameLine(Float(0.0), Float(5.0))
+                    if ImGuiSliderFloat("##albedo", &selected.material.albedo, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
                         
                     }
                 } else {

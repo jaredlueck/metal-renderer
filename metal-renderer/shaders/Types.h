@@ -50,6 +50,7 @@ struct InstanceData {
     simd_float4 baseColor;
     simd_float4 specular;
     float roughness;
+    float albedo;
     
     // shininess for blinn-phong shader
     float shininess;

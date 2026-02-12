@@ -62,8 +62,37 @@ namespace BRDF {
         return (F / M_PI_F) * ((D * G)/((VdN * NdL)));
     }
 
-    float3 orenNayer(){
-        return float3(0);
+    float orenNayer(float albedo, float roughness, float3 N, float3 L, float3 V){
+        float sigma2 = roughness * roughness;
+        float C1 = 1 - 0.5 * (sigma2 / (sigma2 * 0.33));
+        
+        float C2 = 0;
+        
+        // projection of L onto surface plane
+        float3 lp = normalize(float3(L.x, 0, L.z));
+        // projection of V onto the surface plane
+        float3 vp = normalize(float3(V.x, 0, V.z));
+        
+        // relative azimuth
+        float cosRelativeAzimuth = dot(lp, vp);
+        float zenithI = acos(dot(N, L));
+        float zenithR = acos(dot(N, V));
+        
+        float alpha = max(zenithI, zenithR);
+        float beta = min(zenithI, zenithR);
+        
+        if(cosRelativeAzimuth >= 0){
+            C2 = 0.45 * (sigma2 / (sigma2 + 0.09)) * sin(alpha);
+        } else {
+            C2 = 0.45 * (sigma2 / (sigma2 + 0.09)) * (sin(alpha) - pow((2*beta)/M_PI_F, 3));
+        }
+        
+        float C3 = 0.125 * (sigma2 / (sigma2 + 0.09)) * pow((4*alpha*beta/pow(M_PI_F, 2)),2);
+        
+        float L1 = (C1 + C2 * cosRelativeAzimuth * tan(beta) + C3 * (1 - abs(cosRelativeAzimuth)) * tan((alpha + beta) / 2));
+        float L2 = 0.17 * albedo * (sigma2 / (sigma2 + 0.13)) * (1 - cosRelativeAzimuth * pow(((2*beta)/M_PI_F), 2));
+        
+        return L1 + L2;
     }
 }
 
@@ -112,7 +141,7 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         // incident light color with attenuation
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
         
-        float lightDiffuse = max(dot(N, L), 0.0);
+        float3 lightDiffuse = (material.albedo/ M_PI_F) * clamp(dot(N, L), 0.0, 1.0) * BRDF::orenNayer(material.albedo, material.roughness, N, L, V);
         float alpha = material.roughness * material.roughness;
         float3 lightSpec = max(BRDF::cookTorrence(specular, alpha, N, L, V), 0);
         
