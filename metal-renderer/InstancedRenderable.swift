@@ -13,7 +13,6 @@ class Instance {
     var transform: Transform
     var castsShadows: Bool = true
     var material: Material
-//    var renderable: InstancedRenderable
     
     init(transform: Transform, material: Material) {
         self.id = UUID().uuidString
@@ -41,7 +40,6 @@ class InstancedRenderable {
     }
 
     func addInstance(instance: Instance) {
-        let id = UUID().uuidString
         instances.append(instance)
     }
     
@@ -57,7 +55,12 @@ class InstancedRenderable {
                 for mdlSubmesh in mdlSubmeshes {
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
-                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor, specular:$0.material.specular, roughness: $0.material.roughness, albedo: $0.material.albedo, shininess: $0.material.shininess) }
+                    let material = mdlSubmesh.material
+                    let specular = material?.property(with: .specular)
+                    let roughness = material?.property(with: .roughness)
+                    let r = roughness?.floatValue
+                    let s = specular?.float3Value
+                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor,  roughness: $0.material.roughness, albedo: $0.material.albedo, specular:$0.material.specular, shininess: $0.material.shininess) }
                     let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
 
                     instanceData.withUnsafeBytes { rawBuffer in
@@ -74,12 +77,12 @@ class InstancedRenderable {
                     }
 
                     switch mdlSubmesh.indexType {
-                    case .uInt16:
-                        indexType = .uint16
-                    case .uInt32:
-                        indexType = .uint32
-                    default:
-                        indexType = .uint32
+                        case .uInt16:
+                            indexType = .uint16
+                        case .uInt32:
+                            indexType = .uint32
+                        default:
+                            indexType = .uint32
                     }
 
                     if let mtkIndexBuffer = mdlSubmesh.indexBuffer as? MTKMeshBuffer {

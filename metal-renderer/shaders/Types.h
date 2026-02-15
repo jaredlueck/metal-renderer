@@ -20,6 +20,7 @@ enum BufferIndices : int {
 enum TextureIndices {
     TextureIndexAlbedo = 0,
     TextureIndexShadow = 1,
+    TextureIndexSkybox = 2,
 };
 
 enum SamplerIndices {
@@ -48,9 +49,9 @@ struct InstanceData {
     
     // Material
     simd_float4 baseColor;
-    simd_float4 specular;
     float roughness;
     float albedo;
+    float specular;
     
     // shininess for blinn-phong shader
     float shininess;

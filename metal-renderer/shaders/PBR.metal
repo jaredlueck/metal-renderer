@@ -36,6 +36,12 @@ namespace NDF {
         float nm = dot(n, m);
         return (positiveCharacteristic(nm) / (M_PI_F * pow(roughness, 2) * pow(nm, 4))) * exp((pow(nm, 2) - 1)/(pow(roughness, 2.0)*pow(nm, 2)));
     }
+    
+    float GGX(float roughness, float3 N, float3 M){
+        float alpha = roughness * roughness;
+        float NdM = dot(N, M);
+        return positiveCharacteristic(NdM) * alpha / (M_PI_F * (1 + pow(NdM, 2.0) * (alpha - 1)));
+    }
 }
 
 namespace Mask {
@@ -44,55 +50,41 @@ namespace Mask {
 
 namespace BRDF {
     // compute fresnel color using schlick approximation
-    float3 fresnel(float3 F0, float3 n, float3 l){
+    float fresnel(float F0, float3 n, float3 l){
         return F0 + (1.0f - F0) * pow(1.0f - clamp(dot(n, l), 0.0f, 1.0f), 5.0f);
     }
 
-    float3 cookTorrence(float3 specular, float roughness, float3 N, float3 L, float3 V){
+    float3 cookTorrence(float3 F, float roughness, float3 N, float3 L, float3 V){
         float3 H = normalize(L + V);
         float3 M = H;
-        float HdN = saturate(dot(H, N));
-        float VdN = saturate(dot(V, N));
+        float NdH = saturate(dot(H, N));
+        float NdV = saturate(dot(V, N));
         float VdH = saturate(dot(V, H));
-        float LdN = saturate(dot(L, N));
         float NdL = saturate(dot(N, L));
-        float G = min(1.0, min((2*HdN*VdN)/VdH,(2*HdN*LdN)/VdH));
-        float D = NDF::beckmann(roughness, N, M);
-        float3 F = fresnel(0.04, N, L);
-        return (F / M_PI_F) * ((D * G)/((VdN * NdL)));
+        float G = min(1.0, min((2*NdH*NdV)/VdH,(2*NdH*NdL)/VdH));
+        float D = NDF::GGX(roughness, N, M);
+        return (F / M_PI_F) * ((D * G)/((NdL * NdV)));
     }
 
-    float orenNayer(float albedo, float roughness, float3 N, float3 L, float3 V){
+    float3 orenNayer(float3 albedo, float roughness, float3 N, float3 L, float3 V){
         float sigma2 = roughness * roughness;
-        float C1 = 1 - 0.5 * (sigma2 / (sigma2 * 0.33));
         
-        float C2 = 0;
-        
-        // projection of L onto surface plane
-        float3 lp = normalize(float3(L.x, 0, L.z));
-        // projection of V onto the surface plane
-        float3 vp = normalize(float3(V.x, 0, V.z));
-        
+        float NdL = dot(N, L);
+        float NdV = dot(N, V);
+        float3 lp = normalize(L - N * NdL);
+        float3 vp = normalize(V - N * NdV);
         // relative azimuth
         float cosRelativeAzimuth = dot(lp, vp);
-        float zenithI = acos(dot(N, L));
-        float zenithR = acos(dot(N, V));
+        float sinThetaI = sqrt(max(0.0, 1 - NdL*NdL));
+        float sinThetaO = sqrt(max(0.0, 1 - NdV*NdV));
         
-        float alpha = max(zenithI, zenithR);
-        float beta = min(zenithI, zenithR);
+        float alphaSin = max(sinThetaI, sinThetaO);
+        float eps = 1e-4;
+        float betaTan = min(sinThetaI/max(eps, NdL), sinThetaO/max(eps, NdV));
         
-        if(cosRelativeAzimuth >= 0){
-            C2 = 0.45 * (sigma2 / (sigma2 + 0.09)) * sin(alpha);
-        } else {
-            C2 = 0.45 * (sigma2 / (sigma2 + 0.09)) * (sin(alpha) - pow((2*beta)/M_PI_F, 3));
-        }
-        
-        float C3 = 0.125 * (sigma2 / (sigma2 + 0.09)) * pow((4*alpha*beta/pow(M_PI_F, 2)),2);
-        
-        float L1 = (C1 + C2 * cosRelativeAzimuth * tan(beta) + C3 * (1 - abs(cosRelativeAzimuth)) * tan((alpha + beta) / 2));
-        float L2 = 0.17 * albedo * (sigma2 / (sigma2 + 0.13)) * (1 - cosRelativeAzimuth * pow(((2*beta)/M_PI_F), 2));
-        
-        return L1 + L2;
+        float A = 1.0 - 0.5 * (sigma2 / (sigma2 + 0.33));
+        float B = 0.45 * (sigma2 / (sigma2 + 0.09));
+        return (albedo / M_PI_F) * (A + B * max(0.0, cosRelativeAzimuth)) * alphaSin * betaTan;
     }
 }
 
@@ -141,11 +133,13 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         // incident light color with attenuation
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
         
-        float3 lightDiffuse = (material.albedo/ M_PI_F) * clamp(dot(N, L), 0.0, 1.0) * BRDF::orenNayer(material.albedo, material.roughness, N, L, V);
-        float alpha = material.roughness * material.roughness;
-        float3 lightSpec = max(BRDF::cookTorrence(specular, alpha, N, L, V), 0);
+        float F = BRDF::fresnel(material.specular, N, L);
         
-        diffuse += shadowFactor * lightDiffuse * material.baseColor.xyz * lightColor;
+        float3 lightDiffuse = clamp(dot(N, L), 0.0, 1.0) * BRDF::orenNayer(material.baseColor.xyz, material.roughness, N, L, V);
+        float alpha = material.roughness * material.roughness;
+        float3 lightSpec = max(BRDF::cookTorrence(F, alpha, N, L, V), 0);
+        
+        diffuse += (1 - F) * shadowFactor * lightDiffuse *  lightColor;
         specular += specShadow * lightSpec * lightColor;
     }
     if(debug.specular == 1){

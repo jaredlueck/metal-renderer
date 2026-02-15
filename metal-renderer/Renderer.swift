@@ -56,6 +56,7 @@ class Renderer: NSObject, MTKViewDelegate {
     let depthPixelFormat: MTLPixelFormat
     
     let shadowMap: MTLTexture
+    let skyboxTexture: MTLTexture
     var depthStencilStates: DepthStencilStates
     
     lazy var forwardPassDescriptor: MTLRenderPassDescriptor = {
@@ -109,6 +110,15 @@ class Renderer: NSObject, MTKViewDelegate {
         
         shadowMap = device.makeTexture(descriptor: shadowMapDesc)!
         self.depthStencilStates = DepthStencilStates(device: device)
+        
+        let textureLoader = MTKTextureLoader(device: device)
+        let skyboxTextureUrl = Bundle.main.url(forResource: "vertical", withExtension: "png")!
+        self.skyboxTexture = try! textureLoader.newTexture(URL: skyboxTextureUrl, options: [.cubeLayout: true])
+        let skyboxDesc = MTLTextureDescriptor()
+        skyboxDesc.textureType = .typeCube
+        skyboxDesc.width = width
+        skyboxDesc.height = height
+        skyboxDesc.usage = [.shaderRead]
         super.init()
     }
     
@@ -210,15 +220,31 @@ class Renderer: NSObject, MTKViewDelegate {
 
     func encodeForwardStage(using renderEncoder: MTLRenderCommandEncoder){
         var debugData = editor.getDebugValues()
+        let frameData = editor.getFrameData()
         withUnsafeBytes(of: &debugData){ rawBuffer in
             renderEncoder.setFragmentBytes(rawBuffer.baseAddress!,
                                            length: MemoryLayout<DebugData>.stride,
                                            index: Int(BufferIndexDebug.rawValue))
         }
+        withUnsafeBytes(of: frameData) { rawBuffer in
+            renderEncoder.setFragmentBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameData>.stride,
+                                     index: Int(BufferIndexFrameData.rawValue))
+            renderEncoder.setVertexBytes(rawBuffer.baseAddress!,
+                                           length: MemoryLayout<FrameData>.stride,
+                                   index: Int(BufferIndexFrameData.rawValue))
+        }
+                
+        encodeStage(using: renderEncoder, label: "skybox"){
+            renderEncoder.setRenderPipelineState(skybox)
+            renderEncoder.setDepthStencilState(depthStencilStates.skybox)
+            renderEncoder.setFragmentTexture(skyboxTexture, index: Int(TextureIndexSkybox.rawValue))
+            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        }
         encodeStage(using: renderEncoder, label: "pbr"){
             renderEncoder.setRenderPipelineState(forwardPbr)
             
-            let frameData = editor.getFrameData()
+            
             let sceneData = scene.getRenderSceneData()
             let lights = sceneData.pointLights
             let sceneRenderables = sceneData.renderables[.pbr]!
@@ -313,6 +339,14 @@ class Renderer: NSObject, MTKViewDelegate {
         } catch {
             fatalError(error.localizedDescription)
         }
+    }
+    
+    lazy var skybox = makeRenderPipelineState(label: "skybox") { descriptor in
+        descriptor.vertexFunction = library.makeFunction(name: "full_screen_triangle_vertex")!
+        descriptor.fragmentFunction = library.makeFunction(name: "skyboxFragment")!
+        descriptor.vertexDescriptor = nil
+        descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
+        descriptor.depthAttachmentPixelFormat = depthPixelFormat
     }
 
     lazy var forwardBlinnPhong = makeRenderPipelineState(label: "forward blinn phong") { descriptor in

@@ -406,56 +406,69 @@ class Editor {
         var show_demo_window = true
         
         imGuiEncoder.setDepthStencilState(depthStencilStates.shadowGeneration)
-        if let selected = selectedEntity, selected.nodeType == .model{
+        if let selected = selectedEntity{
             ImGuiSetNextWindowPos(ImVec2(x: viewWidth - 10, y: 10), ImGuiCond(ImGuiCond_Always.rawValue), ImVec2(x: 1, y: 0))
             ImGuiSetNextWindowSize(ImVec2(x: 300, y: 325), 0)
             ImGuiBegin("Inspector", &show_demo_window, 0)
-            if ImGuiCollapsingHeader("Material", Int32(ImGuiTreeNodeFlags_DefaultOpen.rawValue)){
-                let items: [Shader] = [.blinnPhong, .pbr]
-                var currentIndex: Int = items.firstIndex(of: selected.material.shader)!
-                // Begin the combo box with a label and the preview value
-                ImGuiTextUnformatted("Shader")
-                ImGuiSameLine(Float(0.0), Float(15.0))
-                if ImGuiBeginCombo("##Shader", selected.material.shader.rawValue, 0) {
-                    for i in 0..<items.count {
-                        // Determine if this item is currently selected
-                        var isSelected = (i == currentIndex)
-
-                        // Render the item as selectable
-                        if ImGuiSelectable(items[i].rawValue, &isSelected, 0, ImVec2()) {
-                            currentIndex = i
-                            selected.material.shader = items[i]
+            if selected.nodeType == .model{
+                if ImGuiCollapsingHeader("Material", Int32(ImGuiTreeNodeFlags_DefaultOpen.rawValue)){
+                    let items: [Shader] = [.blinnPhong, .pbr]
+                    var currentIndex: Int = items.firstIndex(of: selected.material.shader)!
+                    // Begin the combo box with a label and the preview value
+                    ImGuiTextUnformatted("Shader")
+                    ImGuiSameLine(Float(0.0), Float(15.0))
+                    if ImGuiBeginCombo("##Shader", selected.material.shader.rawValue, 0) {
+                        for i in 0..<items.count {
+                            // Determine if this item is currently selected
+                            var isSelected = (i == currentIndex)
+                            
+                            // Render the item as selectable
+                            if ImGuiSelectable(items[i].rawValue, &isSelected, 0, ImVec2()) {
+                                currentIndex = i
+                                selected.material.shader = items[i]
+                            }
+                            
+                            // Optionally set default focus on the selected item for keyboard navigation
+                            if isSelected {
+                                ImGuiSetItemDefaultFocus()
+                            }
                         }
-
-                        // Optionally set default focus on the selected item for keyboard navigation
-                        if isSelected {
-                            ImGuiSetItemDefaultFocus()
+                        ImGuiEndCombo()
+                    }
+                    if selected.material.shader == .pbr{
+                        ImGuiTextUnformatted("Roughness")
+                        ImGuiSameLine(Float(0.0), Float(5.0))
+                        if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                            
+                        }
+                        ImGuiTextUnformatted("Albedo")
+                        ImGuiSameLine(Float(0.0), Float(5.0))
+                        if ImGuiSliderFloat("##albedo", &selected.material.albedo, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                            
+                        }
+                        ImGuiTextUnformatted("Specular")
+                        ImGuiSameLine(Float(0.0), Float(5.0))
+                        if ImGuiSliderFloat("##specular", &selected.material.specular, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                            
+                        }
+                    } else {
+                        ImGuiTextUnformatted("Shininess")
+                        ImGuiSameLine(Float(0.0), Float(5.0))
+                        if ImGuiSliderFloat("##shininess", &selected.material.shininess, Float(1.0), Float(256.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                            
                         }
                     }
-                    ImGuiEndCombo()
+                    if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), nil){}
+                    ImGuiCheckbox("Casts Shadows", &selected.castShadows)
                 }
-                if selected.material.shader == .pbr{
-                    ImGuiTextUnformatted("Roughness")
+                }else if selected.nodeType == .pointLight {
+                    ImGuiTextUnformatted("radius")
                     ImGuiSameLine(Float(0.0), Float(5.0))
-                    if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                    if ImGuiSliderFloat("##radius", &selected.lightData!.radius, Float(1.0), Float(256.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
                         
                     }
-                    ImGuiTextUnformatted("Albedo")
-                    ImGuiSameLine(Float(0.0), Float(5.0))
-                    if ImGuiSliderFloat("##albedo", &selected.material.albedo, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                        
-                    }
-                } else {
-                    ImGuiTextUnformatted("Shininess")
-                    ImGuiSameLine(Float(0.0), Float(5.0))
-                    if ImGuiSliderFloat("##shininess", &selected.material.shininess, Float(1.0), Float(256.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                        
-                    }
-                }
-                var a = Float(1.0)
-                if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), nil){}
             }
-            ImGuiCheckbox("Casts Shadows", &selected.castShadows)
+           
             ImGuiEnd()
         }
             

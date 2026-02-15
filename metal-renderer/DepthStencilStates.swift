@@ -23,6 +23,11 @@ struct DepthStencilStates {
         descriptor.isDepthWriteEnabled = false
         descriptor.depthCompareFunction = .always
     }
+    
+    lazy var skybox = makeDepthStencilState(label: "skybox"){ descriptor in
+        descriptor.isDepthWriteEnabled = false
+        descriptor.depthCompareFunction = .always
+    }
 
     let device: MTLDevice
     

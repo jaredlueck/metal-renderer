@@ -13,8 +13,8 @@ enum Shader: String, Codable {
 class Material: Codable {
     var shader: Shader = .pbr
     var baseColor: simd_float4 = simd_float4(0.5, 0.5, 0.5, 1)
-    var specular: simd_float4 = simd_float4(1.0, 1.0, 1.0, 1)
     var roughness: simd_float1 = 0.5
     var shininess: simd_float1 = 32
     var albedo: simd_float1 = 0.4;
+    var specular: simd_float1 = 0.5
 }
