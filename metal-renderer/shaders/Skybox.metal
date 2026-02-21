@@ -28,13 +28,11 @@ vertex VSOut full_screen_triangle_vertex(uint vid [[vertex_id]]) {
 
 fragment float4 skyboxFragment(VSOut in [[stage_in]],
                               texturecube<float> skyTex [[texture(TextureIndexSkybox)]],
+                              sampler s [[sampler(SamplerIndexCube)]],
                               constant FrameData& uniforms [[buffer(BufferIndexFrameData)]]) {
-    constexpr sampler linearSampler (mip_filter::linear,
-                                     mag_filter::linear,
-                                     min_filter::linear);
     float4 clip = float4(in.ndc, 1.0, 1.0);
     float3 viewPos = normalize((uniforms.inverseProjection * clip).xyz);
     float4 worldDir = normalize((uniforms.inverseView) * float4(viewPos, 0.0));
-    float4 color = skyTex.sample(linearSampler, worldDir.xyz);
+    float4 color = skyTex.sample(s, worldDir.xyz, level(0));
     return color;
 }

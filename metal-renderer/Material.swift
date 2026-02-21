@@ -17,4 +17,5 @@ class Material: Codable {
     var shininess: simd_float1 = 32
     var albedo: simd_float1 = 0.4;
     var specular: simd_float1 = 0.5
+    var indexOfRefraction: simd_float1 = 1.5
 }

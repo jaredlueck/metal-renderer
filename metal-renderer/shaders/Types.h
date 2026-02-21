@@ -21,6 +21,7 @@ enum TextureIndices {
     TextureIndexAlbedo = 0,
     TextureIndexShadow = 1,
     TextureIndexSkybox = 2,
+    TextureIndexEnvironmentMap = 3
 };
 
 enum SamplerIndices {
@@ -52,6 +53,7 @@ struct InstanceData {
     float roughness;
     float albedo;
     float specular;
+    float Ni;
     
     // shininess for blinn-phong shader
     float shininess;
@@ -61,4 +63,5 @@ struct DebugData {
     uint8_t normal;
     uint8_t specular;
     uint8_t diffuse;
+    uint8_t environment;
 };

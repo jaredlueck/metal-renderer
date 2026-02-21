@@ -65,6 +65,6 @@ fragment float4 gridFragment(VSOut in [[stage_in]]){
     float a = max(max(left, right), max(top, bottom));
     float minDist = min(min(distLeft, distRight), min(distTop, distBottom));
     
-    return float4(1.0, 1.0, 1.0, a) * falloff;
+    return float4(1.0, 1.0, 1.0, 0.2 * a) * falloff;
 }
 

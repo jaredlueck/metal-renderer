@@ -83,6 +83,7 @@ class Editor {
     var debugNormal = false
     var debugSpecular = false
     var debugDiffuse = false
+    var debugEnvironment = false
     
     var depthStencilStates: DepthStencilStates
     
@@ -138,6 +139,7 @@ class Editor {
         
         let colorTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: Int(view.bounds.width), height: Int(view.bounds.height), mipmapped: false)
         colorTextureDescriptor.usage = [.shaderRead, .renderTarget]
+        
         
         self.maskTexture = device.makeTexture(descriptor: colorTextureDescriptor)!
 
@@ -239,12 +241,14 @@ class Editor {
         encoder.popDebugGroup()
     }
     
-    lazy var maskPassDescriptor: MTLRenderPassDescriptor = {
-        var descriptor = MTLRenderPassDescriptor()
+    var maskPassDescriptor: MTLRenderPassDescriptor {
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = maskTexture
         descriptor.colorAttachments[0].loadAction = .clear
         descriptor.colorAttachments[0].storeAction = .store
+        descriptor.colorAttachments[0].clearColor = MTLClearColorMake(1, 0, 0, 0)
         return descriptor
-    }()
+    }
 
     lazy var editorHudPassDescriptor: MTLRenderPassDescriptor = {
         var descriptor = MTLRenderPassDescriptor()
@@ -269,9 +273,6 @@ class Editor {
     func encode(commandBuffer: MTLCommandBuffer) {
         let frameData = getFrameData()
         
-        let maskPass = maskPassDescriptor
-        maskPass.colorAttachments[0].texture = maskTexture
-                
         editorHudPassDescriptor.colorAttachments[0].texture = self.view.currentDrawable?.texture
         editorHudPassDescriptor.depthAttachment.texture = self.view.depthStencilTexture
         
@@ -313,12 +314,14 @@ class Editor {
                 }
                 maskEncoder.label = "Mask pass render encoder"
                 
+                
                 withUnsafeBytes(of: frameData) { rawBuffer in
                     maskEncoder.setVertexBytes(rawBuffer.baseAddress!,
                                                length: MemoryLayout<FrameData>.stride,
                                                index: Int(BufferIndexFrameData.rawValue))
                 }
                 
+                maskEncoder.setDepthStencilState(depthStencilStates.hud)
                 maskPipeline.bind(encoder: maskEncoder)
                 let model = assetManager.getAssetById(selected.assetId!)!
                 
@@ -328,7 +331,6 @@ class Editor {
                 instance.draw(renderEncoder: maskEncoder, instanceId: nil)
                 maskEncoder.endEncoding()
                 
-//                encodeStage(using: <#T##MTLRenderCommandEncoder#>, label: <#T##String#>, <#T##() -> Void#>)
                 guard let outlineEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
                     fatalError("Failed to create render command encoder")
                 }
@@ -441,6 +443,11 @@ class Editor {
                         if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
                             
                         }
+                        ImGuiTextUnformatted("IOR")
+                        ImGuiSameLine(Float(0.0), Float(5.0))
+                        if ImGuiSliderFloat("##ior", &selected.material.indexOfRefraction, Float(0.0), Float(20), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
+                            
+                        }
                         ImGuiTextUnformatted("Albedo")
                         ImGuiSameLine(Float(0.0), Float(5.0))
                         if ImGuiSliderFloat("##albedo", &selected.material.albedo, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
@@ -481,6 +488,7 @@ class Editor {
         ImGuiCheckbox("normal", &debugNormal)
         ImGuiCheckbox("specular", &debugSpecular)
         ImGuiCheckbox("diffuse", &debugDiffuse)
+        ImGuiCheckbox("environment", &debugEnvironment)
         ImGuiEnd()
         
         ImGuiRender()
@@ -491,7 +499,7 @@ class Editor {
     }
     
     func getDebugValues() -> DebugData {
-        return DebugData(normal: debugNormal ? 1 : 0, specular: debugSpecular ? 1 : 0, diffuse: debugDiffuse ? 1 : 0)
+        return DebugData(normal: debugNormal ? 1 : 0, specular: debugSpecular ? 1 : 0, diffuse: debugDiffuse ? 1 : 0, environment: debugEnvironment ? 1 : 0)
     }
     
     func drawRadius(encoder: MTLRenderCommandEncoder, origin: SIMD3<Float>, radius: Float){

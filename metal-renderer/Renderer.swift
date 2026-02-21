@@ -55,6 +55,7 @@ class Renderer: NSObject, MTKViewDelegate {
     let colorPixelFormat: MTLPixelFormat
     let depthPixelFormat: MTLPixelFormat
     
+    let sampler: MTLSamplerState
     let shadowMap: MTLTexture
     let skyboxTexture: MTLTexture
     var depthStencilStates: DepthStencilStates
@@ -104,7 +105,7 @@ class Renderer: NSObject, MTKViewDelegate {
         shadowMapDesc.width = width
         shadowMapDesc.height = height
         shadowMapDesc.arrayLength = 6
-        shadowMapDesc.mipmapLevelCount = 1
+        shadowMapDesc.mipmapLevelCount = 8
         shadowMapDesc.sampleCount = 1
         shadowMapDesc.usage = [.renderTarget, .shaderRead]
         
@@ -112,13 +113,18 @@ class Renderer: NSObject, MTKViewDelegate {
         self.depthStencilStates = DepthStencilStates(device: device)
         
         let textureLoader = MTKTextureLoader(device: device)
-        let skyboxTextureUrl = Bundle.main.url(forResource: "vertical", withExtension: "png")!
-        self.skyboxTexture = try! textureLoader.newTexture(URL: skyboxTextureUrl, options: [.cubeLayout: true])
-        let skyboxDesc = MTLTextureDescriptor()
-        skyboxDesc.textureType = .typeCube
-        skyboxDesc.width = width
-        skyboxDesc.height = height
-        skyboxDesc.usage = [.shaderRead]
+        let skyboxTextureUrl = Bundle.main.url(forResource: "space", withExtension: "png")!
+        self.skyboxTexture = try! textureLoader.newTexture(URL: skyboxTextureUrl, options: [
+              MTKTextureLoader.Option.cubeLayout: MTKTextureLoader.CubeLayout.vertical,
+              MTKTextureLoader.Option.generateMipmaps: true,
+              MTKTextureLoader.Option.SRGB: true
+        ])
+        let samplerDescriptor = MTLSamplerDescriptor()
+        samplerDescriptor.magFilter = .linear
+        samplerDescriptor.minFilter = .linear
+        samplerDescriptor.mipFilter = .linear
+        self.sampler = device.makeSamplerState(descriptor: samplerDescriptor)!
+        
         super.init()
     }
     
@@ -234,8 +240,13 @@ class Renderer: NSObject, MTKViewDelegate {
                                            length: MemoryLayout<FrameData>.stride,
                                    index: Int(BufferIndexFrameData.rawValue))
         }
+        
+        renderEncoder.setFragmentTexture(skyboxTexture, index: Int(TextureIndexEnvironmentMap.rawValue))
+        renderEncoder.setFragmentSamplerState(sampler, index: Int(SamplerIndexCube.rawValue))
+        
                 
         encodeStage(using: renderEncoder, label: "skybox"){
+            
             renderEncoder.setRenderPipelineState(skybox)
             renderEncoder.setDepthStencilState(depthStencilStates.skybox)
             renderEncoder.setFragmentTexture(skyboxTexture, index: Int(TextureIndexSkybox.rawValue))

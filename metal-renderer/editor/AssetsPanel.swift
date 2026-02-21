@@ -77,7 +77,7 @@ public class AssetsWindow {
 
         assetURLs = try! urls.filter { url in
             let rv = try url.resourceValues(forKeys: [.isDirectoryKey])
-            return rv.isDirectory != true && url.pathExtension.lowercased() == "obj"
+            return rv.isDirectory != true && (url.pathExtension.lowercased() == "usdc" || url.pathExtension.lowercased() == "obj")
         }
     }
 }

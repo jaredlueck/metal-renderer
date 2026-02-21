@@ -45,7 +45,9 @@ class InstancedRenderable {
     
     func draw(renderEncoder: MTLRenderCommandEncoder, instanceId: String?) {
         for i in 0..<model.asset.count {
-            guard let mdlMesh = model.asset.object(at: i) as? MDLMesh else { continue }
+            guard let mdlMesh = model.asset.object(at: i) as? MDLMesh else {
+                continue
+            }
             
             if let mtkBuffer = mdlMesh.vertexBuffers.first as? MTKMeshBuffer {
                 renderEncoder.setVertexBuffer(mtkBuffer.buffer, offset: 0, index: Int(BufferIndexVertex.rawValue))
@@ -56,11 +58,12 @@ class InstancedRenderable {
                     let indexCount = mdlSubmesh.indexCount
                     let indexType: MTLIndexType
                     let material = mdlSubmesh.material
-                    let specular = material?.property(with: .specular)
-                    let roughness = material?.property(with: .roughness)
-                    let r = roughness?.floatValue
-                    let s = specular?.float3Value
-                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor,  roughness: $0.material.roughness, albedo: $0.material.albedo, specular:$0.material.specular, shininess: $0.material.shininess) }
+                    let specular = material?.property(with: .specular)!.floatValue
+                    let roughness = material!.property(with: .roughness)!.floatValue
+                    let baseColor = material?.property(with: .baseColor)!.float4Value
+                    let shininess = material?.property(with: .specularExponent)?.floatValue ?? 0.0
+                    let Ni = material?.property(with: .materialIndexOfRefraction)?.floatValue ?? 0.0
+                    let instanceData = instances.map { InstanceData(model: $0.transform.getMatrix(), normalMatrix: $0.transform.getNormalMatrix(), baseColor: $0.material.baseColor, roughness: $0.material.roughness, albedo: $0.material.albedo, specular: $0.material.specular, Ni: $0.material.indexOfRefraction, shininess: $0.material.shininess) }
                     let bufferlength = MemoryLayout<InstanceData>.stride * instanceData.count
 
                     instanceData.withUnsafeBytes { rawBuffer in
