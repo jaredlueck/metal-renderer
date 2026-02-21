@@ -31,16 +31,16 @@ float blinnPhong(float3 n, float3 m, float roughness){
     return positiveCharacteristic(nm) * ((roughness + 2)/2*M_PI_F) * pow(nm, roughness);
 }
 
-float beckmann(float roughness, float3 n, float3 m){
+float beckmann(float alpha, float3 n, float3 m){
     float nm = dot(n, m);
-    return (positiveCharacteristic(nm) / (M_PI_F * pow(roughness, 2) * pow(nm, 4))) * exp((pow(nm, 2) - 1)/(pow(roughness, 2.0)*pow(nm, 2)));
+    return (positiveCharacteristic(nm) / (M_PI_F * alpha * pow(nm, 4))) * exp((pow(nm, 2) - 1)/(alpha*pow(nm, 2)));
 }
 
-float GGX(float roughness, float3 N, float3 H) {
-    float alpha = roughness * roughness;     // perceptual roughness -> microfacet alpha
+float GGX(float alpha, float3 N, float3 H) {
     float a2 = alpha * alpha;
     float NdH = saturate(dot(N, H));
-    float denom = NdH * NdH * (a2 - 1.0) + 1.0;
+    float NdH2 = pow(NdH, 2.0);
+    float denom = (1 + NdH2 * (a2 - 1));
     return a2 / (M_PI_F * denom * denom);
 }
 
@@ -61,15 +61,43 @@ float3 fresnel(float3 F0, float3 n, float3 l){
     return F0 + (1.0f - F0) * pow(1.0f - clamp(dot(n, l), 0.0f, 1.0f), 5.0f);
 }
 
-float3 cookTorrence(float3 F, float roughness, float3 N, float3 L, float3 V){
+float lambda_GGX(float3 N, float3 S, float alpha){
+    float NdS = saturate(dot(N, S));
+    float NdS2 = pow(NdS, 2.0);
+    float a = NdS / (alpha * sqrt(1 - NdS2));
+    float a2 = pow(a, 2.0);
+    
+    return (-1 + sqrt(1 + (1/a2)))/2;
+}
+
+float smith_G1(float3 M, float3 V, float lambdaV){
+    float MdV = dot(M, V);
+    return positiveCharacteristic(MdV) / (1 + lambdaV);
+}
+
+float smith_G2(float3 L, float3 V, float3 M, float lambdaV, float lambdaL){
+    float MdV = dot(M, V);
+    float MdL = dot(M, L);
+    return (positiveCharacteristic(MdV) * positiveCharacteristic(MdL))/( 1 + lambdaV + lambdaL);
+}
+
+float separated_G2(float3 L, float3 V, float3 M, float lambdaV, float lambdaL){
+    return smith_G1(M, V, lambdaV) * smith_G1(M, L, lambdaL);
+}
+
+
+float3 cookTorrence(float3 F, float alpha, float3 N, float3 L, float3 V){
     float3 H = normalize(L + V);
-    float3 M = H;
-    float NdV = saturate(dot(V, N));
+    float NdV = saturate(dot(N, V));
     float NdL = saturate(dot(N, L));
-    float G = GGX(roughness, N, H);
-    float sigma = max(1e-4, roughness * roughness);
-    float D = beckmann(sigma, N, M);
-    return (F / M_PI_F) * ((D * G)/((NdL * NdV)));
+
+    float lambdaV = lambda_GGX(N, V, alpha);
+    float lambdaL = lambda_GGX(N, L, alpha);
+    float G = separated_G2(L, V, H, lambdaV, lambdaL);
+
+    float D = GGX(alpha, N, H);
+
+    return (D * F * G) / max(4.0 * NdL * NdV, 1e-4);
 }
 
 float3 orenNayer(float3 albedo, float roughness, float3 N, float3 L, float3 V){
@@ -116,7 +144,7 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
     float3 specular = float3(0);
     float3 N = normalize(in.normal);
     float3 V = normalize(-in.viewPos);
-    float3 F0 = pow((material.Ni - 1)/(material.Ni + 2), 2.0);
+    float3 F0 = pow((material.Ni - 1)/(material.Ni + 1), 2.0);
 
     {
         float3 N = normalize(in.worldNormal);
@@ -131,14 +159,11 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float3 radiance = envMap.sample(shadowSampler, R).xyz;
         float3 F = fresnel(F0, N, R);
         
-        float alpha = material.roughness;
-        float3 lightSpec = material.specular * max(cookTorrence(F, alpha, N, R, V), 0);
-        
+        float alpha = material.roughness * material.roughness;
         float3 H = normalize(R + V);
         
-        // Lambertian diffuse for global illumination
         diffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, R, V, H);
-        specular = radiance * lightSpec * material.specular;
+        specular = radiance * cookTorrence(F, alpha, N, R, V) * material.specular;
     }
 
     if (debug.environment == 1){
@@ -163,13 +188,15 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
 
         float3 F = fresnel(F0, N, L);
-
         float3 lightDiffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, L, V, H);
-        float alpha = material.roughness;
-        float3 lightSpec = max(cookTorrence(F, alpha, N, L, V), 0);
+
+        float alpha = material.roughness * material.roughness;
+        float3 lightSpec = cookTorrence(F, alpha, N, L, V);
 
         diffuse += shadowFactor * lightDiffuse * lightColor;
-        specular +=  material.specular * specShadow * lightSpec * lightColor;
+        specular += specShadow * material.specular * lightSpec * lightColor;
+        
+//        return float4(lightSpec, 1.0);
     }
 
     if(debug.specular == 1){
