@@ -11,10 +11,23 @@
 		0F628D672F08AD13001EEC60 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 0F628D662F08AD08001EEC60 /* .gitignore */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		0FEDF8D62F4B547000CE84EA /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "metal-renderer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F628D662F08AD08001EEC60 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		0FB823482F2D6D990086C503 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = README.md; sourceTree = "<group>"; };
+		0FEDF8D82F4B547000CE84EA /* prefilter-environment-map */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "prefilter-environment-map"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +54,16 @@
 			path = images;
 			sourceTree = "<group>";
 		};
+		0FEDF8CA2F4B530C00CE84EA /* tools */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = tools;
+			sourceTree = "<group>";
+		};
+		0FEDF8D92F4B547000CE84EA /* prefilter-environment-map */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "prefilter-environment-map";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,16 +75,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0FEDF8D52F4B547000CE84EA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0F5B44522EE7DC94006C3F8B = {
 			isa = PBXGroup;
 			children = (
+				0FEDF8CA2F4B530C00CE84EA /* tools */,
 				0FB823BE2F2D717C0086C503 /* images */,
 				0FB823482F2D6D990086C503 /* README.md */,
 				0F628D662F08AD08001EEC60 /* .gitignore */,
 				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
+				0FEDF8D92F4B547000CE84EA /* prefilter-environment-map */,
 				0F5B445C2EE7DC94006C3F8B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -70,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */,
+				0FEDF8D82F4B547000CE84EA /* prefilter-environment-map */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,6 +125,7 @@
 			fileSystemSynchronizedGroups = (
 				0F5B445D2EE7DC94006C3F8B /* metal-renderer */,
 				0FB823BE2F2D717C0086C503 /* images */,
+				0FEDF8CA2F4B530C00CE84EA /* tools */,
 			);
 			name = "metal-renderer";
 			packageProductDependencies = (
@@ -100,6 +134,28 @@
 			productName = "metal-swift-new";
 			productReference = 0F5B445B2EE7DC94006C3F8B /* metal-renderer.app */;
 			productType = "com.apple.product-type.application";
+		};
+		0FEDF8D72F4B547000CE84EA /* prefilter-environment-map */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0FEDF8DC2F4B547000CE84EA /* Build configuration list for PBXNativeTarget "prefilter-environment-map" */;
+			buildPhases = (
+				0FEDF8D42F4B547000CE84EA /* Sources */,
+				0FEDF8D52F4B547000CE84EA /* Frameworks */,
+				0FEDF8D62F4B547000CE84EA /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0FEDF8D92F4B547000CE84EA /* prefilter-environment-map */,
+			);
+			name = "prefilter-environment-map";
+			packageProductDependencies = (
+			);
+			productName = "prefilter-environment-map";
+			productReference = 0FEDF8D82F4B547000CE84EA /* prefilter-environment-map */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -114,6 +170,9 @@
 					0F5B445A2EE7DC94006C3F8B = {
 						CreatedOnToolsVersion = 26.1;
 						LastSwiftMigration = 2610;
+					};
+					0FEDF8D72F4B547000CE84EA = {
+						CreatedOnToolsVersion = 26.1;
 					};
 				};
 			};
@@ -136,6 +195,7 @@
 			projectRoot = "";
 			targets = (
 				0F5B445A2EE7DC94006C3F8B /* metal-renderer */,
+				0FEDF8D72F4B547000CE84EA /* prefilter-environment-map */,
 			);
 		};
 /* End PBXProject section */
@@ -153,6 +213,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		0F5B44572EE7DC94006C3F8B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0FEDF8D42F4B547000CE84EA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -352,6 +419,28 @@
 			};
 			name = Release;
 		};
+		0FEDF8DD2F4B547000CE84EA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		0FEDF8DE2F4B547000CE84EA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -369,6 +458,15 @@
 			buildConfigurations = (
 				0F5B446F2EE7DC95006C3F8B /* Debug */,
 				0F5B44702EE7DC95006C3F8B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0FEDF8DC2F4B547000CE84EA /* Build configuration list for PBXNativeTarget "prefilter-environment-map" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0FEDF8DD2F4B547000CE84EA /* Debug */,
+				0FEDF8DE2F4B547000CE84EA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
