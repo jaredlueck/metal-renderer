@@ -71,20 +71,19 @@ float lambda_GGX(float3 N, float3 S, float alpha){
 }
 
 float smith_G1(float3 M, float3 V, float lambdaV){
-    float MdV = dot(M, V);
+    float MdV = saturate(dot(M, V));
     return positiveCharacteristic(MdV) / (1 + lambdaV);
 }
 
 float smith_G2(float3 L, float3 V, float3 M, float lambdaV, float lambdaL){
-    float MdV = dot(M, V);
-    float MdL = dot(M, L);
+    float MdV = saturate(dot(M, V));
+    float MdL = saturate(dot(M, L));
     return (positiveCharacteristic(MdV) * positiveCharacteristic(MdL))/( 1 + lambdaV + lambdaL);
 }
 
 float separated_G2(float3 L, float3 V, float3 M, float lambdaV, float lambdaL){
     return smith_G1(M, V, lambdaV) * smith_G1(M, L, lambdaL);
 }
-
 
 float3 cookTorrence(float3 F, float alpha, float3 N, float3 L, float3 V){
     float3 H = normalize(L + V);
@@ -133,7 +132,8 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
                                  constant uint& lightCount [[buffer(BufferIndexPointLightCount)]],
                                  texturecube_array<float, access :: read> shadowAtlas [[texture(TextureIndexShadow)]],
                                  constant InstanceData& material [[buffer(BufferIndexInstanceData)]],
-                            texturecube<float> envMap [[texture(TextureIndexEnvironmentMap)]],
+                                 texturecube_array<float> envMap [[texture(TextureIndexEnvironmentMap)]],
+                                 texture2d<float> envBrdfLUT [[texture(TextureIndexLUT)]],
                                  constant DebugData& debug [[buffer(BufferIndexDebug)]]) {
     constexpr sampler linearSampler (mip_filter::linear,
                                      mag_filter::linear,
@@ -143,30 +143,46 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
     float3 diffuse = float3(0);
     float3 specular = float3(0);
     float3 N = normalize(in.normal);
+    if(debug.normal == 1){
+        return float4(N, 1.0);
+    }
     float3 V = normalize(-in.viewPos);
     float3 F0 = pow((material.Ni - 1)/(material.Ni + 1), 2.0);
 
     {
+        // Map roughness to array index (0 to arrayLength-1)
+        int arrayLength = envMap.get_array_size();  // Divide by 6 since cube maps have 6 faces per array element
+        float roughnessIndexFloat = material.roughness * material.roughness * float(arrayLength - 1);
+        int roughnessIndex = int(round(roughnessIndexFloat));
+        roughnessIndex = clamp(roughnessIndex, 0, arrayLength - 1);
+        
         float3 N = normalize(in.worldNormal);
         float3 V = normalize(uniforms.cameraPosition.xyz - in.worldPos);
-        if(debug.normal == 1){
-            return float4(N, 1.0);
-        }
+
         float3 I = -V;
         
         float3 R = normalize(reflect(I, N));
+        float NdV = saturate(dot(N,V));
         
-        float3 radiance = envMap.sample(shadowSampler, R).xyz;
+        // Sample the cube texture array at the appropriate roughness index
+        float3 prefilteredColor = envMap.sample(shadowSampler, R, roughnessIndex).xyz;
+        // BRDF LUT: horizontal axis is NdV, vertical is roughness
+        float4 envBRDF = envBrdfLUT.sample(shadowSampler, float2(NdV, material.roughness));
         float3 F = fresnel(F0, N, R);
-        
-        float alpha = material.roughness * material.roughness;
         float3 H = normalize(R + V);
         
         diffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, R, V, H);
-        specular = radiance * cookTorrence(F, alpha, N, R, V) * material.specular;
+        specular = prefilteredColor * (material.specular * envBRDF.x + envBRDF.y);
     }
 
     if (debug.environment == 1){
+        if(debug.specular == 1){
+            return float4(specular, 1.0);
+        }
+
+        if(debug.diffuse == 1){
+            return float4(diffuse, 1.0);
+        }
         return float4(ambient + diffuse + specular, 1.0);
     }
 
@@ -191,12 +207,10 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float3 lightDiffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, L, V, H);
 
         float alpha = material.roughness * material.roughness;
-        float3 lightSpec = cookTorrence(F, alpha, N, L, V);
+        float3 lightSpec = max(cookTorrence(F, alpha, N, L, V), 0);
 
         diffuse += shadowFactor * lightDiffuse * lightColor;
         specular += specShadow * material.specular * lightSpec * lightColor;
-        
-//        return float4(lightSpec, 1.0);
     }
 
     if(debug.specular == 1){

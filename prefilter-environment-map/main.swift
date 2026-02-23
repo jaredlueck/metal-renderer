@@ -11,22 +11,28 @@ import ImageIO
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    print("Usage: prefilter-environment-map <path_to_vertical_cubemap>")
+    print("Usage: prefilter-environment-map <path_to_vertical_cubemap> [num_mip_levels]")
     exit(1)
 }
+
+let numMipLevels = args.count >= 3 ? (Int(args[2]) ?? 5) : 5
 
 let device        = MTLCreateSystemDefaultDevice()!
 let commandQueue  = device.makeCommandQueue()!
 let library       = device.makeDefaultLibrary()!
 let textureLoader = MTKTextureLoader(device: device)
 
-let inputURL  = URL(fileURLWithPath: args[1])
-let outputDir = inputURL.deletingPathExtension().appendingPathExtension("prefiltered")
+let inputURL      = URL(fileURLWithPath: args[1])
+let inputBaseName = inputURL.deletingPathExtension().lastPathComponent
+let outputDir     = inputURL.deletingPathExtension().appendingPathExtension("prefiltered")
 try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
-// Load the vertical-strip cubemap (6 faces stacked top-to-bottom)
+// Load the vertical-strip cubemap (6 faces stacked top-to-bottom).
+// .SRGB: false — keep values in gamma space so the output PNG matches input brightness.
+// (Default sRGB loading would linearize values in the shader, producing a much darker output.)
 let cubeTexture = try textureLoader.newTexture(URL: inputURL, options: [
-    .cubeLayout: MTKTextureLoader.CubeLayout.vertical
+    .cubeLayout: MTKTextureLoader.CubeLayout.vertical,
+    .SRGB: false
 ])
 let faceSize = cubeTexture.width
 
@@ -83,11 +89,13 @@ let th = max(1, prefilterPipeline.maxTotalThreadsPerThreadgroup / tw)
 let tgroups = MTLSize(width: (faceSize + tw - 1) / tw, height: (faceSize + th - 1) / th, depth: 1)
 let tgSize  = MTLSize(width: tw, height: th, depth: 1)
 
-// Roughness levels: 0 = mirror reflection, 1 = fully diffuse
-let roughnessLevels: [Float] = [0.0, 0.25, 0.5, 0.75, 1.0]
+// Roughness levels evenly spaced from 0 (mirror) to 1 (fully diffuse)
+let roughnessLevels: [Float] = (0..<numMipLevels).map { i in
+    numMipLevels > 1 ? Float(i) / Float(numMipLevels - 1) : 0.0
+}
 
 print("Generating prefiltered environment maps...")
-for var roughness in roughnessLevels {
+for (mipLevel, var roughness) in roughnessLevels.enumerated() {
     // One 2D texture per face — avoids cube-texture write access limitations on some devices
     let faceTextures = (0..<6).map { _ in makeFaceTexture(size: faceSize) }
 
@@ -123,7 +131,7 @@ for var roughness in roughnessLevels {
         }
     }
 
-    let name = String(format: "roughness_%.2f.png", roughness)
+    let name = "\(inputBaseName)_\(mipLevel + 1).png"
     savePNG(strip, width: faceSize, height: faceSize * 6,
             to: outputDir.appendingPathComponent(name))
     print("  Saved \(name)")

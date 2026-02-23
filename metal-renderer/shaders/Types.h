@@ -21,7 +21,8 @@ enum TextureIndices {
     TextureIndexAlbedo = 0,
     TextureIndexShadow = 1,
     TextureIndexSkybox = 2,
-    TextureIndexEnvironmentMap = 3
+    TextureIndexEnvironmentMap = 3,
+    TextureIndexLUT = 4
 };
 
 enum SamplerIndices {

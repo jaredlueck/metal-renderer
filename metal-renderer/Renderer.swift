@@ -9,6 +9,7 @@
 
 import Metal
 import MetalKit
+import MetalPerformanceShaders
 import simd
 import ImGui
 
@@ -58,6 +59,8 @@ class Renderer: NSObject, MTKViewDelegate {
     let sampler: MTLSamplerState
     let shadowMap: MTLTexture
     let skyboxTexture: MTLTexture
+    let envMapTexture: MTLTexture
+    let envBRDFLUT: MTLTexture
     var depthStencilStates: DepthStencilStates
     
     lazy var forwardPassDescriptor: MTLRenderPassDescriptor = {
@@ -116,16 +119,95 @@ class Renderer: NSObject, MTKViewDelegate {
         let skyboxTextureUrl = Bundle.main.url(forResource: "space", withExtension: "png")!
         self.skyboxTexture = try! textureLoader.newTexture(URL: skyboxTextureUrl, options: [
               MTKTextureLoader.Option.cubeLayout: MTKTextureLoader.CubeLayout.vertical,
-              MTKTextureLoader.Option.generateMipmaps: true,
               MTKTextureLoader.Option.SRGB: true
         ])
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.magFilter = .linear
         samplerDescriptor.minFilter = .linear
-        samplerDescriptor.mipFilter = .linear
+        samplerDescriptor.mipFilter = .linear  // Linear is fine now since we're using texture arrays
         self.sampler = device.makeSamplerState(descriptor: samplerDescriptor)!
         
+        // Initialize environment map synchronously
+        self.envMapTexture = try! Self.initEnvironmentMapSync(device: device, commandQueue: commandQueue, baseName: "space")
+        let lutURL = Bundle.main.url(forResource: "brdf_lut", withExtension: "png")!
+        self.envBRDFLUT = try! textureLoader.newTexture(URL: lutURL)
         super.init()
+    }
+    
+    
+    static func initEnvironmentMapSync(device: MTLDevice, commandQueue: MTLCommandQueue, baseName: String) throws -> MTLTexture {
+        let textureLoader = MTKTextureLoader(device: device)
+
+        // Discover roughness level files: <baseName>_1.png, <baseName>_2.png, ...
+        var urls: [URL] = []
+        var level = 1
+        while let url = Bundle.main.url(forResource: "\(baseName)_\(level)", withExtension: "png") {
+            urls.append(url)
+            level += 1
+        }
+
+        guard !urls.isEmpty else {
+            throw NSError(domain: "RendererError", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "No environment map textures found for '\(baseName)'"])
+        }
+
+        // Load all roughness level textures
+        var textures: [MTLTexture] = []
+        for url in urls {
+            let texture = try textureLoader.newTexture(URL: url, options: [
+                .cubeLayout: MTKTextureLoader.CubeLayout.vertical,
+                .SRGB: false,
+                .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
+            ])
+            textures.append(texture)
+        }
+
+        let baseTexture = textures[0]
+        
+        // Create a cube texture array where each array slice represents a different roughness level
+        let envMapDescriptor = MTLTextureDescriptor()
+        envMapDescriptor.textureType = .typeCubeArray
+        envMapDescriptor.pixelFormat = baseTexture.pixelFormat
+        envMapDescriptor.width = baseTexture.width
+        envMapDescriptor.height = baseTexture.height
+        envMapDescriptor.arrayLength = textures.count  // One array slice per roughness level
+        envMapDescriptor.usage = [.shaderRead]
+        envMapDescriptor.storageMode = .private
+        
+        guard let envMapTexture = device.makeTexture(descriptor: envMapDescriptor) else {
+            throw NSError(domain: "RendererError", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create environment map texture array"])
+        }
+        
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let blitEncoder = commandBuffer.makeBlitCommandEncoder()!
+        
+        // Copy each source texture into its corresponding array slice
+        for (arrayIndex, sourceTexture) in textures.enumerated() {
+            // Each source texture has 6 faces (cube map)
+            for face in 0..<6 {
+                // Calculate the destination slice: arrayIndex * 6 + face
+                let destSlice = arrayIndex * 6 + face
+                
+                blitEncoder.copy(
+                    from: sourceTexture,
+                    sourceSlice: face,
+                    sourceLevel: 0,
+                    sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                    sourceSize: MTLSize(width: sourceTexture.width, height: sourceTexture.height, depth: 1),
+                    to: envMapTexture,
+                    destinationSlice: destSlice,
+                    destinationLevel: 0,
+                    destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+                )
+            }
+        }
+        
+        blitEncoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        return envMapTexture
     }
     
     func draw(in view: MTKView) {
@@ -241,7 +323,8 @@ class Renderer: NSObject, MTKViewDelegate {
                                    index: Int(BufferIndexFrameData.rawValue))
         }
         
-        renderEncoder.setFragmentTexture(skyboxTexture, index: Int(TextureIndexEnvironmentMap.rawValue))
+        renderEncoder.setFragmentTexture(envMapTexture, index: Int(TextureIndexEnvironmentMap.rawValue))
+        renderEncoder.setFragmentTexture(envBRDFLUT, index: Int(TextureIndexLUT.rawValue))
         renderEncoder.setFragmentSamplerState(sampler, index: Int(SamplerIndexCube.rawValue))
         
                 

@@ -279,7 +279,7 @@ class Editor {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: editorHudPassDescriptor) else {
             fatalError("Failed to create render command encoder")
         }
-        
+        encoder.label = "Grid"
         encoder.setDepthStencilState(depthStencilStates.forwardPass)
         
 //        encodeStage(using: <#T##MTLRenderCommandEncoder#>, label: <#T##String#>, <#T##() -> Void#>)
