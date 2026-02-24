@@ -18,4 +18,5 @@ class Material: Codable {
     var albedo: simd_float1 = 0.4;
     var specular: simd_float1 = 0.5
     var indexOfRefraction: simd_float1 = 1.5
+    var metallic: simd_float1 = 0.0
 }

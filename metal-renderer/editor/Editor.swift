@@ -437,32 +437,53 @@ class Editor {
                         }
                         ImGuiEndCombo()
                     }
-                    if selected.material.shader == .pbr{
-                        ImGuiTextUnformatted("Roughness")
-                        ImGuiSameLine(Float(0.0), Float(5.0))
-                        if ImGuiSliderFloat("##roughness", &selected.material.roughness, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                            
-                        }
-                        ImGuiTextUnformatted("IOR")
-                        ImGuiSameLine(Float(0.0), Float(5.0))
-                        if ImGuiSliderFloat("##ior", &selected.material.indexOfRefraction, Float(0.0), Float(20), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                            
-                        }
-                        ImGuiTextUnformatted("Albedo")
-                        ImGuiSameLine(Float(0.0), Float(5.0))
-                        if ImGuiSliderFloat("##albedo", &selected.material.albedo, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                            
-                        }
-                        ImGuiTextUnformatted("Specular")
-                        ImGuiSameLine(Float(0.0), Float(5.0))
-                        if ImGuiSliderFloat("##specular", &selected.material.specular, Float(0.0), Float(1.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                            
+                    // ImGuiTableColumnFlags: WidthFixed = 1<<4 = 16, NoResize = 1<<5 = 32, WidthStretch = 1<<3 = 8
+                    let fixedCol = ImGuiTableColumnFlags(16 | 32)
+                    let stretchCol = ImGuiTableColumnFlags(8)
+                    let flags = Int32(ImGuiSliderFlags_None.rawValue)
+                    if selected.material.shader == .pbr {
+                        if ImGuiBeginTable("##mat", 2, ImGuiTableFlags(0), ImVec2(x: 0, y: 0), 0) {
+                            ImGuiTableSetupColumn(nil, fixedCol, 0, 0)
+                            ImGuiTableSetupColumn(nil, stretchCol, 0, 0)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("Roughness")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##roughness", &selected.material.roughness, 0, 1, nil, flags)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("Metallic")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##metallic", &selected.material.metallic, 0, 1, nil, flags)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("IOR")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##ior", &selected.material.indexOfRefraction, 0, 20, nil, flags)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("Albedo")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##albedo", &selected.material.albedo, 0, 1, nil, flags)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("Specular")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##specular", &selected.material.specular, 0, 1, nil, flags)
+
+                            ImGuiEndTable()
                         }
                     } else {
-                        ImGuiTextUnformatted("Shininess")
-                        ImGuiSameLine(Float(0.0), Float(5.0))
-                        if ImGuiSliderFloat("##shininess", &selected.material.shininess, Float(1.0), Float(256.0), nil, Int32(ImGuiSliderFlags_None.rawValue )) {
-                            
+                        if ImGuiBeginTable("##mat", 2, ImGuiTableFlags(0), ImVec2(x: 0, y: 0), 0) {
+                            ImGuiTableSetupColumn(nil, fixedCol, 0, 0)
+                            ImGuiTableSetupColumn(nil, stretchCol, 0, 0)
+
+                            ImGuiTableNextRow(ImGuiTableRowFlags(0), 0)
+                            ImGuiTableNextColumn(); ImGuiTextUnformatted("Shininess")
+                            ImGuiTableNextColumn(); ImGuiSetNextItemWidth(-1)
+                            ImGuiSliderFloat("##shininess", &selected.material.shininess, 1, 256, nil, flags)
+
+                            ImGuiEndTable()
                         }
                     }
                     if ImGuiColorPicker4("baseColor", &selected.material.baseColor, Int32(ImGuiColorEditFlags_DisplayRGB.rawValue), nil){}

@@ -55,6 +55,7 @@ struct InstanceData {
     float albedo;
     float specular;
     float Ni;
+    float metallic;
     
     // shininess for blinn-phong shader
     float shininess;

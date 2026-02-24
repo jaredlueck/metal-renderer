@@ -89,6 +89,9 @@ float3 cookTorrence(float3 F, float alpha, float3 N, float3 L, float3 V){
     float3 H = normalize(L + V);
     float NdV = saturate(dot(N, V));
     float NdL = saturate(dot(N, L));
+    if(NdL <= 0) {
+        return float3(0.0);
+    }
 
     float lambdaV = lambda_GGX(N, V, alpha);
     float lambdaL = lambda_GGX(N, L, alpha);
@@ -96,7 +99,7 @@ float3 cookTorrence(float3 F, float alpha, float3 N, float3 L, float3 V){
 
     float D = GGX(alpha, N, H);
 
-    return (D * F * G) / max(4.0 * NdL * NdV, 1e-4);
+    return (D * F * G) / 4.0 * NdL * NdV;
 }
 
 float3 orenNayer(float3 albedo, float roughness, float3 N, float3 L, float3 V){
@@ -170,8 +173,7 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float4 envBRDF = envBrdfLUT.sample(shadowSampler, float2(NdV, material.roughness));
         float3 F = fresnel(F0, N, R);
         float3 H = normalize(R + V);
-        
-        diffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, R, V, H);
+        diffuse = (1 - material.metallic) * (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, R, V, H);
         specular = prefilteredColor * (material.specular * envBRDF.x + envBRDF.y);
     }
 
@@ -204,22 +206,27 @@ fragment float4 pbrFragment(VertexOut in [[stage_in]],
         float3 lightColor = calculatePointLightColor1(light, in.worldPos);
 
         float3 F = fresnel(F0, N, L);
-        float3 lightDiffuse = (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, L, V, H);
+        float3 lightDiffuse = (1 - material.metallic) * (1 - F) * diffuseDisneyBRDF(material.roughness, material.baseColor.xyz, N, L, V, H);
 
-        float alpha = material.roughness * material.roughness;
-        float3 lightSpec = max(cookTorrence(F, alpha, N, L, V), 0);
+        float alpha = pow(material.roughness * 0.5, 2.0);
+        float3 lightSpec = cookTorrence(F, alpha, N, L, V);
+        
+        float3 specTerm = lightSpec;
+        float3 diffuseTerm = lightDiffuse;
 
         diffuse += shadowFactor * lightDiffuse * lightColor;
         specular += specShadow * material.specular * lightSpec * lightColor;
+        
+        if(debug.specular == 1){
+            return float4(specTerm, 1.0);
+        }
+
+        if(debug.diffuse == 1){
+            return float4(diffuseTerm, 1.0);
+        }
     }
 
-    if(debug.specular == 1){
-        return float4(specular, 1.0);
-    }
 
-    if(debug.diffuse == 1){
-        return float4(diffuse, 1.0);
-    }
 
     float3 result = ambient + diffuse + specular;
     return float4(result, 1.0);
