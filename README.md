@@ -23,7 +23,7 @@ A real-time physically-based render engine built with Metal and Swift.
 
 ## Physically-Based Rendering
 
-![PBR Demo](./images/PBR.gif)
+![PBR Demo](./images/PBR_new.gif)
 
 The PBR implementation follows industry-standard techniques for realistic material rendering:
 
